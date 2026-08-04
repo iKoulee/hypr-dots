@@ -5,7 +5,16 @@
     "spacing": 8,
     "modules-left": ["hyprland/workspaces"],
     "modules-center": ["clock"],
-    "modules-right": ["tray", "cpu", "memory", "network", "hyprland/language", "pulseaudio"],
+    "modules-right": ["custom/dnd", "tray", "cpu", "memory", "network", "hyprland/language", "pulseaudio"],
+
+    "custom/dnd": {
+        "exec": "$HOME/.local/bin/hypr-dnd status",
+        "return-type": "json",
+        "interval": "once",
+        "signal": 8,
+        "on-click": "$HOME/.local/bin/hypr-dnd toggle",
+        "tooltip": true
+    },
     
     "hyprland/workspaces": {
         "format": "{icon}",

@@ -38,6 +38,7 @@ just --list           # přehled všech příkazů
 | `dot_config/hypr/` | `~/.config/hypr/` |
 | `dot_config/waybar/` | `~/.config/waybar/` |
 | `dot_config/wofi/` | `~/.config/wofi/` |
+| `dot_config/mako/` | `~/.config/mako/` |
 | `dot_config/systemd/user/` | `~/.config/systemd/user/` |
 | `dot_local/bin/executable_*` | `~/.local/bin/` (nasazeno jako spustitelné) |
 | `dot_local/share/applications/` | `~/.local/share/applications/` |
@@ -49,16 +50,16 @@ just --list           # přehled všech příkazů
 
 ### Autostart: systemd user services (preferovaná metoda)
 
-Waybar a hyprpaper jsou spravovány jako **systemd user services**, ne spouštěny přímo z Hyprland configu. Řeší to problém s `PATH` při startu z display manageru a umožňuje `systemctl --user restart waybar` bez zásahu do Hyprlandu.
+Waybar, hyprpaper a mako jsou spravovány jako **systemd user services**, ne spouštěny přímo z Hyprland configu. Řeší to problém s `PATH` při startu z display manageru a umožňuje `systemctl --user restart waybar` bez zásahu do Hyprlandu.
 
 Startup sekvence v `hl.on("hyprland.start")`:
 1. `dbus-update-activation-environment` — exportuje `WAYLAND_DISPLAY`, `XDG_CURRENT_DESKTOP`, `HYPRLAND_INSTANCE_SIGNATURE` do D-Bus (nutné pro XDG portaly a tray)
 2. `systemctl --user import-environment` — zpřístupní stejné proměnné všem user services
-3. `systemctl --user start hyprland-session.target` — nastartuje waybar a hyprpaper
+3. `systemctl --user start hyprland-session.target` — nastartuje waybar, hyprpaper a mako
 
 Unit soubory v `dot_config/systemd/user/`:
-- `hyprland-session.target` — seskupuje session services (`Wants=` waybar, hyprpaper)
-- `waybar.service` / `hyprpaper.service` — `PartOf=hyprland-session.target`, `Restart=on-failure`
+- `hyprland-session.target` — seskupuje session services (`Wants=` waybar, hyprpaper, mako)
+- `waybar.service` / `hyprpaper.service` / `mako.service` — `PartOf=hyprland-session.target`, `Restart=on-failure`
 
 Nová service pro autostart: vytvoř `.service` s `WantedBy=hyprland-session.target` a přidej ji do `Wants=` v targetu.
 
@@ -82,7 +83,12 @@ Klíčové Lua API vzory:
 
 ### Color scheme
 
-Výchozí schéma: **Tokyo Night**. Barvy jsou definovány přímo v jednotlivých CSS/config souborech — zatím bez centrálního token souboru.
+Barvy jsou definovány přímo v jednotlivých CSS/config souborech — zatím bez centrálního token souboru. **Schéma není jednotné:**
+
+- `dot_config/mako/config` — **Tokyo Night** (`#1a1b26`, `#c0caf5`, `#7aa2f7`)
+- `dot_config/waybar/style.css`, `dot_config/wofi/style.css` — fakticky **Catppuccin Mocha** (`#1e1e2e`, `#cdd6f4`, `#89b4fa`), přestože dřívější verze tohoto souboru tvrdila Tokyo Night
+
+Při úpravách drž barvy konzistentní v rámci jednoho souboru; sjednocení palety napříč komponentami zatím nikdo neudělal.
 
 ### Waybar
 
@@ -101,9 +107,39 @@ Stack je **PipeWire/WirePlumber**, ovládá se přes `wpctl`. **`pactl` na stroj
 - Zkratka `Super+Shift+A` je navázaná jen na `output`; bind pro `input` stačí doplnit jedním řádkem v `hyprland.lua`.
 - Přezdívky zařízení jsou **data v `dot_config/hypr-audio/devices.conf`**, ne v skriptu. Formát `glob|ikona|název`, glob se porovnává s `node.name`, první match vyhrává. Nenamatchované zařízení spadne na `node.description` + generickou ikonu.
 - Skript volá jen `wpctl set-default`. Běžící streamy přesouvat netřeba — WirePlumber má `linking.follow-default-target = true` (ověř přes `wpctl settings`), takže nepinnuté streamy následují změnu samy.
-- `notify-send` je volaný podmíněně. Notifikační démon zatím neběží, takže je to no-op; až přibude, začne fungovat bez zásahu do skriptu.
+- `notify-send` je volaný podmíněně. Od zavedení mako (viz sekce Notifikace) se notifikace při přepnutí zařízení reálně zobrazí.
 
 Waybar `pulseaudio` modul: levý klik = mute toggle, pravý klik = přepínač, scroll = hlasitost, tooltip = název zařízení. Multimediální klávesy (`XF86Audio*`) jsou v `hyprland.lua` a jdou taky přes `wpctl`.
+
+### Notifikace
+
+Démon je **mako** (`nix profile install nixpkgs#mako`), spouštěný jako systemd user service `mako.service` navěšená na `hyprland-session.target` — stejný vzor jako waybar a hyprpaper. Bez něj je `notify-send` no-op (což byl stav před jeho zavedením, viz podmíněné volání v `hypr-audio-menu`).
+
+Config `dot_config/mako/config`, dokumentace `man 5 mako`:
+- `anchor=top-center` — na 5120×1440 je výchozí top-right mimo zorné pole
+- `outer-margin=40,10,10,10` — horních 40 px si bere waybar (`height` v `dot_config/waybar/config`); **při změně výšky panelu je potřeba upravit i tohle**
+- `layer=top` — notifikace nejdou přes fullscreen okna; pro opak `layer=overlay`
+- criteria podle `urgency`; kritické mají `default-timeout=0`, takže nezmizí samy
+- `on-button-left=dismiss` — pozor, s `actions=1` tím jsou akce notifikací nedostupné; pro jejich zpřístupnění změň na `invoke-default-action`
+
+Režim **do-not-disturb** je mako *mode* (`[mode=do-not-disturb] invisible=1`), kritické notifikace přes něj projdou díky druhé criteria sekci.
+
+`dot_local/bin/executable_hypr-dnd` (nasazeno jako `~/.local/bin/hypr-dnd`) — sdílený skript pro waybar i keybind:
+- `hypr-dnd status` → jeden řádek JSON pro custom modul `custom/dnd` ve waybaru
+- `hypr-dnd toggle` → `makoctl mode -t do-not-disturb` + `pkill -RTMIN+8 waybar`
+- Waybar modul má `interval: once` a `signal: 8` — žádný polling, překresluje se jen na signál ze skriptu. **Číslo signálu musí sedět na `WAYBAR_SIGNAL` ve skriptu.**
+- Když mako neběží, `status` spadne na „notifikace zapnuté" místo aby selhal.
+
+Keybindy v `hyprland.lua` (`makoctl` volaný absolutní cestou přes `nixBin`, stejný důvod jako u wofi):
+
+| Zkratka | Akce |
+|---------|------|
+| `Super+N` | zavřít poslední notifikaci |
+| `Super+Shift+N` | zavřít všechny |
+| `Super+Ctrl+N` | vyvolat poslední z historie |
+| `Super+Alt+N` | přepnout do-not-disturb |
+
+`just restart-mako` po změně configu, `just test-notify` pro vizuální kontrolu všech tří úrovní priority.
 
 ### Input layout
 

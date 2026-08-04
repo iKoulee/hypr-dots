@@ -1,0 +1,72 @@
+# Mako — notifikační démon
+# Dokumentace: man 5 mako
+#
+# Barevné schéma: Tokyo Night (#1a1b26 pozadí, #c0caf5 text, #7aa2f7 akcent).
+# Pozor: waybar a wofi mají v CSS Catppuccin Mocha — viz poznámka v CLAUDE.md.
+
+font=JetBrainsMono Nerd Font 11
+
+background-color=#1a1b26f2
+text-color=#c0caf5
+border-color=#7aa2f7
+progress-color=over #292e42
+
+width=420
+height=180
+padding=14
+border-size=2
+border-radius=12
+
+# outer-margin platí pro celý seznam, margin pro jednotlivé notifikace.
+# Horních 40 px si bere waybar (height v dot_config/waybar/config), takže
+# outer-margin ho odsadí a notifikace panel nepřekrývají.
+outer-margin=40,10,10,10
+margin=8
+
+icons=1
+max-icon-size=48
+markup=1
+actions=1
+
+# top-center místo výchozího top-right: na 5120×1440 je pravý horní roh
+# mimo zorné pole.
+anchor=top-center
+# "top" nechává notifikace pod fullscreen okny; pro zobrazení i přes ně
+# je potřeba "overlay".
+layer=top
+# Prázdný output = monitor s fokusem.
+output=
+
+default-timeout=5000
+ignore-timeout=0
+max-visible=5
+group-by=app-name
+sort=-time
+
+on-button-left=dismiss
+on-button-middle=none
+on-button-right=dismiss-all
+on-touch=dismiss
+
+[urgency=low]
+border-color=#565f89
+text-color=#a9b1d6
+default-timeout=3000
+
+[urgency=normal]
+border-color=#7aa2f7
+
+# Kritické notifikace nemají timeout — zůstanou, dokud je nezavřeš.
+[urgency=critical]
+border-color=#f7768e
+text-color=#f7768e
+default-timeout=0
+
+# Režim do-not-disturb se přepíná přes ~/.local/bin/hypr-dnd (Super+Alt+N
+# nebo klik na modul ve waybaru).
+[mode=do-not-disturb]
+invisible=1
+
+# Kritické projdou i v DND.
+[mode=do-not-disturb urgency=critical]
+invisible=0

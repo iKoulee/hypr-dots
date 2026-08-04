@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# Přepínač a indikátor režimu do-not-disturb pro mako.
+#
+# Použití: hypr-dnd [status|toggle]
+#
+#   status  vypíše JSON pro custom modul ve waybaru (viz dot_config/waybar/config)
+#   toggle  přepne mako režim do-not-disturb a překreslí waybar modul
+#
+# Sdílí ho waybar (exec + on-click) i keybind Super+Alt+N v hyprland.lua.
+set -euo pipefail
+
+# makoctl je jen v Nix profilu; při startu z display manageru se .profile nenačte
+export PATH="$HOME/.nix-profile/bin:$PATH"
+
+# Musí odpovídat "signal" u custom/dnd ve waybaru (RTMIN+8).
+readonly WAYBAR_SIGNAL=8
+readonly MODE="do-not-disturb"
+
+readonly ICON_ON=""   # notifikace zapnuté
+readonly ICON_OFF=""  # DND
+
+# Vypíše jeden řádek JSON pro waybar. Bez tooltipu se pole "tooltip" nevynechává,
+# waybar chce vždy stejný tvar.
+emit() {
+    jq -cn --arg text "$1" --arg tooltip "$2" --arg class "$3" \
+        '{text: $text, tooltip: $tooltip, class: $class}'
+}
+
+# Vrátí 0, když je DND aktivní. Když mako neběží, makoctl selže — to řeší volající.
+dnd_active() {
+    makoctl mode | grep -qx "$MODE"
+}
+
+cmd_status() {
+    local modes
+    if ! modes="$(makoctl mode 2>/dev/null)"; then
+        emit "$ICON_ON" "mako neběží" ""
+        return 0
+    fi
+
+    if grep -qx "$MODE" <<<"$modes"; then
+        # $'...' kvůli skutečnému zalomení řádku — "\n" v uvozovkách by se
+        # do JSONu dostalo jako literál zpětné lomítko + n.
+        emit "$ICON_OFF" $'Notifikace vypnuté (DND)\nKritické projdou i tak' "dnd"
+        return 0
+    fi
+
+    # Počet čekajících notifikací je jen doplněk tooltipu; když list selže,
+    # zobrazí se holý text. mako 1.11 vrací plné pole, ne starší obal
+    # {"data": [[...]]} — jq proto počítá délku kořene.
+    local count=""
+    count="$(makoctl list -j 2>/dev/null | jq -r 'length' 2>/dev/null || true)"
+    if [[ -n "$count" && "$count" != "null" && "$count" -gt 0 ]]; then
+        emit "$ICON_ON" "Notifikace zapnuté — čeká: $count" ""
+    else
+        emit "$ICON_ON" "Notifikace zapnuté" ""
+    fi
+}
+
+cmd_toggle() {
+    makoctl mode -t "$MODE" >/dev/null
+
+    # Okamžité překreslení modulu; bez běžícího waybaru je to no-op.
+    pkill -RTMIN+"$WAYBAR_SIGNAL" waybar 2>/dev/null || true
+
+    # Zpětná vazba je best-effort — v DND ji mako schová, což je v pořádku.
+    if ! dnd_active && command -v notify-send >/dev/null 2>&1; then
+        notify-send -a "hypr-dnd" "Notifikace zapnuté" "Režim do-not-disturb vypnut" 2>/dev/null || true
+    fi
+}
+
+case "${1:-status}" in
+    status) cmd_status ;;
+    toggle) cmd_toggle ;;
+    *) echo "Použití: $(basename "$0") [status|toggle]" >&2; exit 2 ;;
+esac

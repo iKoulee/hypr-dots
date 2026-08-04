@@ -18,6 +18,7 @@ window#waybar {
 #memory,
 #network,
 #pulseaudio,
+#custom-dnd,
 #tray {
     padding: 0 14px;
     margin: 5px 4px;
@@ -49,6 +50,15 @@ window#waybar {
 }
 
 #pulseaudio.muted {
+    color: #f38ba8;
+}
+
+/* Indikátor do-not-disturb (mako), klik = přepnutí */
+#custom-dnd {
+    color: #89b4fa;
+}
+
+#custom-dnd.dnd {
     color: #f38ba8;
 }
 

@@ -7,12 +7,21 @@ Hyprland dotfiles (Hyprland, Waybar, Wofi, systemd user services) nasazované p�
 - Nix (balíčkovací systém) — na tomto stroji je Nix v novém `nix profile` režimu, ne starém `nix-env`
 - SSH klíč zaregistrovaný na GitHubu (repo se klonuje/pushuje přes SSH: `git@github.com:iKoulee/hypr-dots.git`)
 - PipeWire/WirePlumber včetně `wpctl` a `pw-dump`, plus `jq` — používá je přepínač audio výstupů `~/.local/bin/hypr-audio-menu` (`Super+Shift+A`, nebo `just audio`). Na běžné distribuci jsou to systémové balíčky, čerstvá instalace je ale mít nemusí.
+- `notify-send` (balíček `libnotify`) a `jq` — potřebné pro notifikace a indikátor do-not-disturb ve waybaru.
 
 ## Instalace chezmoi + just
 
 ```bash
 nix profile install nixpkgs#chezmoi nixpkgs#just
 ```
+
+## Instalace mako (notifikační démon)
+
+```bash
+nix profile install nixpkgs#mako
+```
+
+Bez něj nemá kam doručovat notifikace žádná aplikace — na D-Bus se nikdo nepřihlásí k `org.freedesktop.Notifications` a `notify-send` skončí bez efektu. Ovládání je popsané v sekci Notifikace v `CLAUDE.md`.
 
 > Pokud `nix-env -iA nixpkgs.chezmoi nixpkgs.just` skončí chybou `profile ... is incompatible with 'nix-env'`, znamená to, že profil byl vytvořen novým `nix profile` nástrojem — použij příkaz výše.
 

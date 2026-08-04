@@ -285,6 +285,13 @@ hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))    -- dwindle only
 -- Přepínač audio výstupů (wofi). Skript umí i "input" pro mikrofony, zatím bez bindu.
 hl.bind(mainMod .. " + SHIFT + A", hl.dsp.exec_cmd(os.getenv("HOME") .. "/.local/bin/hypr-audio-menu output"))
 
+-- Notifikace (mako). makoctl je taky jen v Nix profilu, proto absolutní cesta.
+hl.bind(mainMod .. " + N",         hl.dsp.exec_cmd(nixBin .. "makoctl dismiss"))
+hl.bind(mainMod .. " + SHIFT + N", hl.dsp.exec_cmd(nixBin .. "makoctl dismiss --all"))
+hl.bind(mainMod .. " + CTRL + N",  hl.dsp.exec_cmd(nixBin .. "makoctl restore"))
+-- Přepínač do-not-disturb; skript navíc překreslí indikátor ve waybaru.
+hl.bind(mainMod .. " + ALT + N",   hl.dsp.exec_cmd(os.getenv("HOME") .. "/.local/bin/hypr-dnd toggle"))
+
 -- Move focus with mainMod + arrow keys
 hl.bind(mainMod .. " + left",  hl.dsp.focus({ direction = "left" }))
 hl.bind(mainMod .. " + right", hl.dsp.focus({ direction = "right" }))

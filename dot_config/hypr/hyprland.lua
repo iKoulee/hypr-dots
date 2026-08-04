@@ -41,7 +41,8 @@ local fileManager = "nautilus"
 -- Hyprland's PATH (started via GDM -> start-hyprland-nix) doesn't include
 -- it, so a bare command name fails silently.
 local nixBin      = os.getenv("HOME") .. "/.nix-profile/bin/"
-local menu        = nixBin .. "hyprlauncher"
+-- local menu        = nixBin .. "hyprlauncher"
+local menu        = nixBin .. "wofi --show drun"
 
 
 -------------------
@@ -315,7 +316,6 @@ local mainMod = "SUPER" -- Sets "Windows" key as main modifier
 
 -- Example binds, see https://wiki.hypr.land/Configuring/Basics/Binds/ for more
 hl.bind(mainMod .. " + Q", hl.dsp.exec_cmd(terminal))
-hl.bind(mainMod .. " + D", hl.dsp.exec_cmd(nixBin .. "wofi --show drun"))
 -- local closeWindowBind = hl.bind(altMod .. " + F4", hl.dsp.window.close())
 -- closeWindowBind:set_enabled(false)
 -- Ukončení Hyprlandu. Nativní dispatcher, ne oklika přes `hyprctl dispatch` —

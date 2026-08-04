@@ -1,0 +1,18 @@
+[Unit]
+Description=KeePassXC password manager
+Documentation=https://keepassxc.org/docs/
+PartOf=hyprland-session.target
+After=hyprland-session.target
+
+[Service]
+# start-hyprland-nix nastavuje kvůli NVIDII LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu
+# a hyprland.lua ho posílá do systemd přes import-environment. Nix binárky by si
+# pak natáhly systémové Qt místo svého (keepassxc 2.7.12 chce Qt 5.15.19, systém
+# má 5.15.18) a spadly na "requires Qt 5.15.19, found Qt 5.15.18".
+UnsetEnvironment=LD_LIBRARY_PATH
+ExecStart=%h/.nix-profile/bin/keepassxc
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=hyprland-session.target

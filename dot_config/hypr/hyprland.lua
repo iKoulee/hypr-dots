@@ -59,8 +59,8 @@ local menu        = nixBin .. "hyprlauncher"
 --   hl.exec_cmd("waybar & hyprpaper & firefox")
 -- end)
 hl.on("hyprland.start", function ()
-  hl.exec_cmd("dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE GBM_BACKEND __GLX_VENDOR_LIBRARY_NAME LIBVA_DRIVER_NAME LD_LIBRARY_PATH")
-  hl.exec_cmd("systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE GBM_BACKEND __GLX_VENDOR_LIBRARY_NAME LIBVA_DRIVER_NAME LD_LIBRARY_PATH")
+  hl.exec_cmd("dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE GBM_BACKEND __GLX_VENDOR_LIBRARY_NAME LIBVA_DRIVER_NAME LD_LIBRARY_PATH SSH_AUTH_SOCK")
+  hl.exec_cmd("systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE GBM_BACKEND __GLX_VENDOR_LIBRARY_NAME LIBVA_DRIVER_NAME LD_LIBRARY_PATH SSH_AUTH_SOCK")
   hl.exec_cmd("systemctl --user start hyprland-session.target")
 end)
 
@@ -275,7 +275,9 @@ hl.bind(mainMod .. " + Q", hl.dsp.exec_cmd(terminal))
 hl.bind(mainMod .. " + D", hl.dsp.exec_cmd(nixBin .. "wofi --show drun"))
 -- local closeWindowBind = hl.bind(altMod .. " + F4", hl.dsp.window.close())
 -- closeWindowBind:set_enabled(false)
-hl.bind(mainMod .. " + M", hl.dsp.exec_cmd("command -v hyprshutdown >/dev/null 2>&1 && hyprshutdown || hyprctl dispatch 'hl.dsp.exit()'"))
+-- Ukončení Hyprlandu. Nativní dispatcher, ne oklika přes `hyprctl dispatch` —
+-- hyprctl je jen v Nix profilu a při startu z display manageru by nemusel být v PATH.
+hl.bind(mainMod .. " + M", hl.dsp.exit())
 hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(fileManager))
 hl.bind(mainMod .. " + V", hl.dsp.window.float({ action = "toggle" }))
 hl.bind(mainMod .. " + R", hl.dsp.exec_cmd(menu))
@@ -284,6 +286,12 @@ hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))    -- dwindle only
 
 -- Přepínač audio výstupů (wofi). Skript umí i "input" pro mikrofony, zatím bez bindu.
 hl.bind(mainMod .. " + SHIFT + A", hl.dsp.exec_cmd(os.getenv("HOME") .. "/.local/bin/hypr-audio-menu output"))
+
+-- KeePassXC. Běží jako systemd service schovaná v trayi, tohle jen vyvolá okno
+-- (keepassxc je single-instance, druhé spuštění existující okno jen zvedne).
+-- Přes ~/.local/bin, ne nixBin — je tam shim, který odstraní LD_LIBRARY_PATH
+-- zděděný z NVIDIA nastavení ve start-hyprland-nix. Bez něj spadne na Qt verzi.
+hl.bind(mainMod .. " + SHIFT + K", hl.dsp.exec_cmd(os.getenv("HOME") .. "/.local/bin/keepassxc"))
 
 -- Notifikace (mako). makoctl je taky jen v Nix profilu, proto absolutní cesta.
 hl.bind(mainMod .. " + N",         hl.dsp.exec_cmd(nixBin .. "makoctl dismiss"))
@@ -381,4 +389,18 @@ hl.window_rule({
 
     move  = "20 monitor_h-120",
     float = true,
+})
+
+-- KeePassXC: odemykací dialog a prompty na přístup k heslům. Na 5120×1440 by
+-- dlaždicově umístěný dialog skončil mimo zorné pole, proto float + center
+-- (stejný důvod jako anchor=top-center u mako). Titulky dialogů jsou
+-- lokalizované, takže se matchuje na class a pravidlo platí i na hlavní okno —
+-- to stejně startuje minimalizované do traye. Pro dlaždicové chování stačí
+-- tenhle blok zakomentovat.
+hl.window_rule({
+    name  = "float-keepassxc",
+    match = { class = "^org\\.keepassxc\\.KeePassXC$" },
+
+    float  = true,
+    center = true,
 })

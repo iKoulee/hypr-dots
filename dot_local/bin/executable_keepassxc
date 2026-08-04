@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+#
+# Shim před nixovou binárkou KeePassXC.
+#
+# start-hyprland-nix kvůli NVIDII exportuje
+#   LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu/gbm
+# a to dědí celá session — terminály, keybindy i D-Bus aktivované procesy.
+# Nixový keepassxc si pak místo svého Qt natáhne systémové a skončí na
+#   Executable 'keepassxc' requires Qt 5.15.19, found Qt 5.15.18.
+#
+# ~/.local/bin je v PATH před ~/.nix-profile/bin, takže tenhle soubor nixovou
+# binárku stíní a chytí i holé `keepassxc` napsané v terminálu.
+# systemd unita (keepassxc.service) řeší totéž přes UnsetEnvironment=, aby
+# nezávisela na tom, jestli je ~/.local/bin nasazený.
+#
+# Stejný shim bude potřeba pro každou další nixovou Qt/GTK aplikaci.
+
+unset LD_LIBRARY_PATH
+exec "$HOME/.nix-profile/bin/keepassxc" "$@"

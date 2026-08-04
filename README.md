@@ -23,6 +23,86 @@ nix profile install nixpkgs#mako
 
 Bez něj nemá kam doručovat notifikace žádná aplikace — na D-Bus se nikdo nepřihlásí k `org.freedesktop.Notifications` a `notify-send` skončí bez efektu. Ovládání je popsané v sekci Notifikace v `CLAUDE.md`.
 
+## Instalace KeePassXC a polkit agenta
+
+```bash
+nix profile install nixpkgs#keepassxc nixpkgs#hyprpolkitagent
+```
+
+**KeePassXC musí být z nixu, ne ze snapu.** Snap confinement mu neumožňuje ani vlastnit
+`org.freedesktop.secrets`, ani sáhnout na ssh-agent socket — detaily v sekci Keyring
+a hesla v `CLAUDE.md`. Pokud na stroji snap verze je, po ověření nixové ji odstraň
+(`snap remove keepassxc`) a config přenes:
+
+```bash
+mkdir -p ~/.config/keepassxc
+cp ~/snap/keepassxc/*/.config/keepassxc/keepassxc.ini ~/.config/keepassxc/
+```
+
+**KeePassXC 2.7 má configy dva.** Ten v `~/.config/keepassxc/` drží přenositelná
+nastavení, zatímco stav vázaný na stroj — hlavně `LastDatabases`, tedy seznam naposledy
+otevřených databází — je v `~/.cache/keepassxc/keepassxc.ini`. Ze snapu se přenáší jen
+ten první, takže po migraci nemá KeePassXC co otevřít a **zobrazí uvítací obrazovku
+s nabídkou založit novou databázi**. Není to chyba: stačí databázi jednou otevřít ručně
+(Open existing database), stav se zapíše a od té doby ji `OpenPreviousDatabasesOnStartup`
+otevírá sám.
+
+### Ruční nastavení v GUI
+
+`~/.config/keepassxc/` je v `.chezmoiignore` (obsahuje privátní KeeShare klíč a stav),
+takže tohle chezmoi nenasadí a je potřeba to nacvakat:
+
+- **General** → *Automatically open previously opened databases*, *Minimize window at
+  application startup*, *Show tray icon*, *Minimize instead of close*
+- **Secret Service Integration** → zapnout, a v databázi vybrat skupinu, která se má
+  vystavit (typicky nová skupina „Secret Service"). **Bez vybrané skupiny integrace
+  tiše nefunguje** — na D-Bus je, ale nevrací žádnou kolekci.
+- **SSH Agent** → *Enable SSH Agent integration*; u jednotlivých entries pak
+  Advanced → SSH Agent → *Add key to agent when database is opened*.
+
+## Firefox mimo snap (nutné pro KeePassXC browser integraci)
+
+Snap Firefox nedokáže spustit `~/.nix-profile/bin/keepassxc-proxy` — jeho AppArmor profil
+povoluje exec v `$HOME` jen pro cesty nezačínající tečkou a pro `/nix/store` nemá pravidlo
+žádné. Dokud je Firefox snap, browser integrace nefunguje, ať je v configu cokoliv.
+
+Přechod na deb verzi z Mozilla repa (vyžaduje root):
+
+```bash
+# 1. Mozilla APT repo
+sudo install -d -m 0755 /etc/apt/keyrings
+wget -q https://packages.mozilla.org/apt/repo-signing-key.gpg -O- \
+  | sudo tee /etc/apt/keyrings/packages.mozilla.org.asc > /dev/null
+
+# ověření otisku klíče (musí vyjít 35BAA0B33E9EB396F59CA838C0BA5CE6DC6315A3)
+gpg -n -q --import --import-options import-show /etc/apt/keyrings/packages.mozilla.org.asc \
+  | awk '/pub/{getline; gsub(/ /,""); print}'
+
+echo "deb [signed-by=/etc/apt/keyrings/packages.mozilla.org.asc] https://packages.mozilla.org/apt mozilla main" \
+  | sudo tee /etc/apt/sources.list.d/mozilla.list > /dev/null
+
+# 2. Přednost Mozilla balíčku před ubuntím přechodovým (ten jen nainstaluje snap)
+printf 'Package: *\nPin: origin packages.mozilla.org\nPin-Priority: 1000\n' \
+  | sudo tee /etc/apt/preferences.d/mozilla > /dev/null
+
+sudo apt update && sudo apt install -y firefox
+```
+
+Pak přenos profilu a odstranění snapu — **Firefox musí být zavřený**:
+
+```bash
+mkdir -p ~/.mozilla/firefox
+cp -a ~/snap/firefox/common/.mozilla/firefox/. ~/.mozilla/firefox/
+sudo snap remove firefox          # až po ověření, že deb verze profil otevře
+```
+
+Nakonec zkontroluj, že native messaging host míří na nix proxy (mělo by už být nastaveno):
+
+```bash
+grep path ~/.mozilla/native-messaging-hosts/org.keepassxc.keepassxc_browser.json
+# → "path": "/home/<user>/.nix-profile/bin/keepassxc-proxy"
+```
+
 > Pokud `nix-env -iA nixpkgs.chezmoi nixpkgs.just` skončí chybou `profile ... is incompatible with 'nix-env'`, znamená to, že profil byl vytvořen novým `nix profile` nástrojem — použij příkaz výše.
 
 Binárky se nainstalují do `~/.nix-profile/bin`. Ujisti se, že je tento adresář na `PATH` (v interaktivním shellu obvykle ano díky Nix profilu; pokud ne):
@@ -66,11 +146,22 @@ Tohle je případ tohoto stroje: repo bylo naklonované na `~/repos/GitHub/iKoul
 
    > **Pozor:** pokud v `~/.config` existují staré symlinky na jiné dotfiles (např. z dřívějšího ručního nasazení), `chezmoi apply` je nahradí reálnými soubory z tohoto repa. Před `apply` se `just diff` vždy podívej, co se přepíše.
 
-3. Povol a nastartuj systemd user services (waybar, hyprpaper):
+3. Povol a nastartuj systemd user services:
 
    ```bash
    just enable-services
    ```
+
+4. Přepni systém na openssh agenta místo gcr (kvůli SSH klíčům z KeePassXC):
+
+   ```bash
+   just enable-keyring-integration
+   ```
+
+   **Efekt nastane až po odhlášení a přihlášení.** Zároveň tím přestane fungovat
+   automatické načítání klíčů z `~/.ssh`, které dělal gnome-keyring — klíče je potřeba
+   buď přidat do KeePassXC databáze, nebo je po přihlášení načíst ručně přes `ssh-add`.
+   Rollback: `just disable-keyring-integration`.
 
 ## Běžné příkazy
 
@@ -80,9 +171,12 @@ just apply            # nasadit změny
 just status           # aktuální stav nasazených souborů
 just reload            # reload Hyprlandu bez restartu
 just restart-waybar    # restart panelu
-just enable-services   # systemctl --user enable --now waybar hyprpaper
-just disable-services  # systemctl --user disable --now waybar hyprpaper
-just bootstrap          # apply + enable-services (první nasazení)
+just restart-keepassxc # restart správce hesel (databáze se pak musí znovu odemknout)
+just enable-services   # systemctl --user enable --now všechny session services
+just disable-services  # systemctl --user disable --now všechny session services
+just enable-keyring-integration   # přepnout na openssh agenta místo gcr
+just disable-keyring-integration  # rollback zpět na gcr-ssh-agent
+just bootstrap          # apply + enable-services + enable-keyring-integration
 just --list             # přehled všech příkazů
 ```
 

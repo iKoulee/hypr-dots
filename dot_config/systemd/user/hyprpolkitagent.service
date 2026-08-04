@@ -1,0 +1,18 @@
+[Unit]
+Description=Hyprland polkit authentication agent
+Documentation=https://github.com/hyprwm/hyprpolkitagent
+PartOf=hyprland-session.target
+After=hyprland-session.target
+
+[Service]
+# Viz komentář v keepassxc.service — systémové knihovny z LD_LIBRARY_PATH nesmí
+# přebít ty nixové.
+UnsetEnvironment=LD_LIBRARY_PATH
+# Pozor: hyprpolkitagent je v libexec/, ne v bin/ (tak ho instaluje i upstream
+# unit), takže se do ~/.nix-profile/bin/ nesymlinkuje.
+ExecStart=%h/.nix-profile/libexec/hyprpolkitagent
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=hyprland-session.target

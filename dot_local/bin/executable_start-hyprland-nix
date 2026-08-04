@@ -13,6 +13,12 @@ export XDG_SESSION_TYPE=wayland
 export GBM_BACKEND=nvidia-drm
 export __GLX_VENDOR_LIBRARY_NAME=nvidia
 
+# SSH agent: openssh místo gcr-ssh-agentu, aby do něj KeePassXC mohl vkládat
+# klíče z databáze. Musí to být tady — GDM/PAM nastaví gcr cestu ještě před
+# spuštěním Hyprlandu, takže později už by se to nepřepsalo.
+# Socket zakládá ssh-agent.socket (viz `just enable-keyring-integration`).
+export SSH_AUTH_SOCK="${XDG_RUNTIME_DIR}/openssh_agent"
+
 # Spuštění Hyprlandu z Nixu
 exec $HOME/.nix-profile/bin/Hyprland
 #exec $HOME/.nix-profile/bin/start-hyprland

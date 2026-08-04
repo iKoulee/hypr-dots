@@ -1,3 +1,8 @@
 CLAUDE.md
 README.md
 justfile
+
+# KeePassXC config je záměrně nespravovaný: keepassxc.ini obsahuje privátní
+# KeeShare klíč a stavové položky (naposledy otevřené databáze). Nastavení,
+# která je po instalaci potřeba nacvakat ručně, jsou popsaná v README.md.
+.config/keepassxc

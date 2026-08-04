@@ -81,6 +81,52 @@ Klíčové Lua API vzory:
 - `hl.animation({...})` / `hl.curve(...)` — animace
 - `hl.on("hyprland.start", fn)` — autostart hook
 
+**Zdroj pravdy pro Lua API je LSP stub, ne wiki.** Hyprland nasazuje do nix profilu
+`~/.nix-profile/share/hypr/stubs/hl.meta.lua` — kompletní `HL.API` (všechny funkce),
+`HL.*Spec` třídy s validními poli každého pravidla a `hl.dsp.*` namespace. Sleduje
+nainstalovanou verzi, zatímco wiki je pro 0.56 místy pozadu a neúplná.
+
+```bash
+grep -n "HL.WorkspaceRuleSpec\|HL.WindowRuleSpec\|HL.ConfigOpt" ~/.nix-profile/share/hypr/stubs/hl.meta.lua
+```
+
+Doplňkově `hyprctl descriptions` — vypíše všechny config options s defaulty, rozsahy
+a popisem (stub dává tvar API, `descriptions` konkrétní klíče a hodnoty):
+
+```bash
+hyprctl descriptions | jq -r '.[] | "\(.name)  def=\(.default)  \(.description)"'
+```
+
+Pro doplňování v editoru nasměruj lua-language-server na adresář `stubs/`.
+
+**Vlastní layout jde napsat v Lua**, plugin není potřeba — `hl.layout.register(jméno, provider)`,
+provider má `recalculate(ctx)` a volitelně `layout_msg(ctx, msg)`. `ctx:column(i, n)` vrátí
+i-tý z n stejně širokých sloupců, `ctx:row`, `ctx:grid_cell` analogicky; `target:place(box)`
+okno umístí a gapy si Hyprland dopočítá sám nad vráceným boxem. Vlastní layout `thirds`
+(sloupce po třetinách) je v `dot_config/hypr/hyprland.lua`. Dvě pasti:
+
+- **Registrované jméno dostane prefix `lua:`** — `general.layout` musí být `"lua:thirds"`.
+  Na neznámé jméno Hyprland tiše spadne na dwindle, bez hlášky v logu; poznáš to jen podle
+  geometrie (dwindle dá na třech oknech 50/25/25).
+- **Druhá registrace stejného jména hodí chybu a utne vyhodnocení zbytku configu.** Proto je
+  volání obalené `pcall`, aby reload prošel. Důsledek: tělo `recalculate` se za běhu už
+  nepřepíše — změny se projeví až po restartu Hyprlandu. Iterovat se dá registrací pod
+  jiným jménem přes `hyprctl dispatch`.
+
+**Pozor na `hyprctl dispatch` v 0.56** — bere Lua, ne starou syntaxi (`exec [workspace 9 silent] kitty`
+skončí na parse error). Dispatchery jako `hl.dsp.window.close()` nebo `hl.dsp.window.move({…})`
+působí na **aktivní okno** a nemají cílový argument, takže při živém fokusu klidně trefí něco
+jiného, než čekáš. Tvary argumentů se dají bezpečně zjistit chybovou hláškou — `hl.dsp.focus({ __probe = 1 })`
+vypíše `Expected one of: direction, monitor, window, …` a nic neprovede. `hl.dsp.window.close()`
+takhle **bezpečné není**, neznámé argumenty ignoruje a okno zavře.
+
+**Layout není globálně exkluzivní.** `general.layout` je jen default; `hl.workspace_rule`
+má pole `layout` a `layout_opts` (viz `HL.WorkspaceRuleSpec` ve stubu), takže jde mít
+jiný layout per workspace. Klíče v `layout_opts` jsou bez prefixu (`column_width`, ne
+`scrolling:column_width`). Za běhu se globální layout přepnout nedá — `hyprctl keyword`
+s Lua configem zmizel (vrací `unknown request`), takže změna = editace `hyprland.lua`
+a `just reload`.
+
 ### NVIDIA + Nix startup
 
 `dot_local/bin/executable_start-hyprland-nix` (nasazeno jako `~/.local/bin/start-hyprland-nix`):

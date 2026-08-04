@@ -94,6 +94,49 @@ hl.env("HYPRCURSOR_SIZE", "24")
 -- hl.permission("/usr/(bin|local/bin)/hyprpm", "plugin", "allow")
 
 
+-------------------------
+---- CUSTOM LAYOUTS  ----
+-------------------------
+
+-- "thirds" — svislé sloupce po třetinách místo binárního dělení dwindle.
+-- Na 5120x1440 jsou tři sloupce použitelná šířka; dwindle by na třetím okně
+-- dal 50/25/25. Čtvrté a další okno se stackuje vertikálně ve svém sloupci.
+--
+-- API viz `HL.LayoutProvider` / `HL.LayoutContext` v
+-- ~/.nix-profile/share/hypr/stubs/hl.meta.lua — registrace musí proběhnout
+-- dřív, než na layout ukáže general.layout níž.
+--
+-- Dvě pasti:
+--   1. Registrované jméno dostane prefix `lua:`, takže general.layout musí být
+--      "lua:thirds". Na neznámé jméno Hyprland tiše spadne na dwindle.
+--   2. Druhá registrace stejného jména hodí chybu a utne vyhodnocení zbytku
+--      configu — proto pcall, aby `hyprctl reload` prošel. Důsledek: tělo
+--      recalculate se za běhu už nepřepíše, změny se projeví až po restartu
+--      Hyprlandu (nebo registrací pod jiným jménem).
+pcall(hl.layout.register, "thirds", {
+    recalculate = function(ctx)
+        local n = #ctx.targets
+        if n == 0 then return end
+
+        local cols = math.min(n, 3)
+
+        for i, target in ipairs(ctx.targets) do
+            local col  = (i - 1) % cols + 1              -- sloupec 1..cols
+            local row  = math.floor((i - 1) / cols) + 1  -- řádek uvnitř sloupce
+            local rows = math.floor((n - col) / cols) + 1
+
+            -- ctx:column(i, n) vrátí i-tý z n stejně širokých sloupců plochy.
+            -- Gapy si Hyprland dopočítá sám nad vráceným boxem, neodečítat.
+            local box = ctx:column(col, cols)
+            box.h = box.h / rows
+            box.y = box.y + box.h * (row - 1)
+
+            target:place(box)
+        end
+    end,
+})
+
+
 -----------------------
 ---- LOOK AND FEEL ----
 -----------------------
@@ -117,7 +160,7 @@ hl.config({
         -- Please see https://wiki.hypr.land/Configuring/Advanced-and-Cool/Tearing/ before you turn this on
         allow_tearing = false,
 
-        layout = "dwindle",
+        layout = "lua:thirds",
     },
 
     decoration = {

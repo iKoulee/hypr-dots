@@ -97,6 +97,53 @@ Barvy jsou definovány přímo v jednotlivých CSS/config souborech — zatím b
 
 Při úpravách drž barvy konzistentní v rámci jednoho souboru; sjednocení palety napříč komponentami zatím nikdo neudělal.
 
+### Tapeta (hyprpaper)
+
+`dot_config/hypr/hyprpaper.conf`, démon jede jako `hyprpaper.service`. Od **0.8.0** (přepis
+na hyprtoolkit) je `wallpaper` hyprlang *special category*, ne jednořádkový klíč, a `preload`
+zmizel úplně — jak z configu, tak z IPC (`hyprctl hyprpaper preload …` → `error: invalid
+hyprpaper request`, viz [gitfudge0/walt#27](https://github.com/gitfudge0/walt/issues/27)).
+
+```
+wallpaper {
+    monitor = DP-2
+    path = ~/.local/share/wallpapers/…jpg   # tilda se expanduje
+    fit_mode = cover                        # výchozí; dál timeout, order, recursive
+}
+```
+
+**Starý formát selže tiše** — config se načte, neznámé klíče se zahodí a jediná stopa je
+`Monitor DP-2 has no target: no wp will be created` v `journalctl --user -u hyprpaper`.
+Service běží, exit code 0, jen není tapeta. Kontrola je `hyprctl hyprpaper listactive`
+(prázdný výstup = nenamapováno). Další klíče mimo blok: `splash`, `splash_offset`,
+`splash_opacity`, `ipc`, `source`.
+
+`just restart-hyprpaper` po změně configu.
+
+**hyprpaper stojí na `LD_LIBRARY_PATH`.** Renderuje přes aquamarine/hyprtoolkit, takže
+potřebuje systémový GBM/EGL stack z `/usr/lib/x86_64-linux-gnu`. Nixová mesa hledá GBM
+backendy v `/run/opengl-driver/lib/gbm`, což je NixOS-only cesta a na tomhle stroji
+neexistuje — bez `LD_LIBRARY_PATH` skončí na `MESA-LOADER: failed to open …` a spadne
+na `SIGABRT`. Naměřeno:
+
+| env | výsledek |
+|-----|----------|
+| `LD_LIBRARY_PATH` + `GBM_BACKEND` | OK |
+| `LD_LIBRARY_PATH`, bez `GBM_BACKEND` | OK — nese to `LD_LIBRARY_PATH`, ne `GBM_BACKEND` |
+| `GBM_BACKEND`, bez `LD_LIBRARY_PATH` | ABRT, `MESA-LOADER: failed to open nvidia-drm` |
+| `GBM_BACKENDS_PATH`, bez `LD_LIBRARY_PATH` | ABRT — projde GBM loader, padne na `eglCreateImageKHR` |
+
+Z toho plyne přímý **konflikt s pravidlem v sekci Keyring a hesla**: nixové Qt aplikace
+potřebují `UnsetEnvironment=LD_LIBRARY_PATH`, hyprpaper naopak spadne. Rozhoduje se to
+per-service — do `hyprpaper.service` ten řádek **nepatří**.
+
+`GBM_BACKENDS_PATH` ze `start-hyprland-nix` je mrtvá proměnná: chybí v obou seznamech ve
+start hooku, takže se do systemd services nedostane, a podle tabulky výše by `LD_LIBRARY_PATH`
+stejně nenahradila.
+
+Historická poznámka: smyčka ~37 core dumpů 4. 8. 2026 mezi 17:14 a 17:18 byla stav **před**
+commitem `dcbd90b`, který `LD_LIBRARY_PATH` do start hooku doplnil — ne race při startu.
+
 ### Waybar
 
 `dot_config/waybar/config` je JSON. Moduly: workspaces (vlevo), clock (střed), tray/cpu/memory/network/language/pulseaudio (vpravo). Vyžaduje **JetBrainsMono Nerd Font**.

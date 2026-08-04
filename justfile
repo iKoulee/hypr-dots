@@ -39,6 +39,10 @@ restart-waybar:
 restart-mako:
     systemctl --user restart mako.service
 
+# Restartovat tapetu (po změně dot_config/hypr/hyprpaper.conf)
+restart-hyprpaper:
+    systemctl --user restart hyprpaper.service
+
 # Restartovat KeePassXC (databáze se pak musí znovu odemknout)
 restart-keepassxc:
     systemctl --user restart keepassxc.service

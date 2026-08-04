@@ -3,8 +3,15 @@ Description=Hyprpaper wallpaper daemon
 Documentation=https://github.com/hyprwm/hyprpaper
 PartOf=hyprland-session.target
 After=hyprland-session.target
+# Výchozí 5/10s se s RestartSec=3 nikdy nevyčerpá (restarty jsou ~4 s od sebe),
+# takže selhání GL inicializace vede na nekonečnou smyčku core dumpů. 60 s to zarazí.
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
+# POZOR: sem nepatří UnsetEnvironment=LD_LIBRARY_PATH (na rozdíl od keepassxc.service
+# a hyprpolkitagent.service). hyprpaper přes něj hledá systémový GBM/EGL stack —
+# bez něj spadne na ABRT. Viz sekce „Tapeta (hyprpaper)" v CLAUDE.md.
 ExecStart=%h/.nix-profile/bin/hyprpaper
 Restart=on-failure
 RestartSec=3

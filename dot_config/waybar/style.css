@@ -1,0 +1,74 @@
+* {
+    /* Je nutné mít nainstalovaný Nerd Font pro správné zobrazení ikon */
+    font-family: "JetBrainsMono Nerd Font", "Font Awesome 6 Free", sans-serif;
+    font-size: 14px;
+    border: none;
+    border-radius: 0;
+}
+
+window#waybar {
+    background-color: rgba(30, 30, 46, 0.85); /* Poloprůhledné tmavé pozadí */
+    color: #cdd6f4;
+    border-bottom: 2px solid #89b4fa;
+}
+
+/* Moduly uprostřed a napravo */
+#clock,
+#cpu,
+#memory,
+#network,
+#pulseaudio,
+#tray {
+    padding: 0 14px;
+    margin: 5px 4px;
+    border-radius: 8px;
+    background-color: #313244;
+    color: #cdd6f4;
+}
+
+/* Specifické barvy pro jednotlivé komponenty */
+#clock {
+    color: #f38ba8;
+    font-weight: bold;
+}
+
+#cpu {
+    color: #a6e3a1;
+}
+
+#memory {
+    color: #f9e2af;
+}
+
+#network {
+    color: #b4befe;
+}
+
+#pulseaudio {
+    color: #89dceb;
+}
+
+/* Workspaces */
+#workspaces {
+    margin: 5px 8px;
+    background-color: #313244;
+    border-radius: 8px;
+}
+
+#workspaces button {
+    padding: 0 10px;
+    color: #6c7086;
+    background: transparent;
+    transition: all 0.2s ease;
+}
+
+#workspaces button.active {
+    color: #89b4fa;
+}
+
+#workspaces button:hover {
+    background: rgba(137, 180, 250, 0.2);
+    box-shadow: none;
+    text-shadow: none;
+}
+

@@ -1,0 +1,62 @@
+{
+    "layer": "top",
+    "position": "top",
+    "height": 40,
+    "spacing": 8,
+    "modules-left": ["hyprland/workspaces"],
+    "modules-center": ["clock"],
+    "modules-right": ["tray", "cpu", "memory", "network", "language", "pulseaudio"],
+    
+    "hyprland/workspaces": {
+        "format": "{icon}",
+        "format-icons": {
+            "active": "",
+            "default": ""
+        },
+        "persistent-workspaces": {
+            "*": 5
+        }
+    },
+    
+    "clock": {
+        "format": " {:%H:%M}",
+        "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>"
+    },
+    
+    "cpu": {
+        "format": " {usage}%",
+        "interval": 2,
+        "tooltip": true
+    },
+    
+    "memory": {
+        "format": " {}%",
+        "interval": 2
+    },
+    
+    "network": {
+        "format-ethernet": " {ipaddr}",
+        "format-disconnected": "⚠ Odpojeno",
+        "tooltip-format": "{ifname} via {gwaddr}"
+    },
+
+    "hyprland/language": {
+        "format": " {}",
+        "format-en": "US",
+        "format-cs": "CZ"
+    }, 
+
+    "pulseaudio": {
+        "format": "{icon} {volume}%",
+        "format-muted": "",
+        "format-icons": {
+            "default": ["", "", ""]
+        },
+        "on-click": "pavucontrol"
+    },
+    
+    "tray": {
+        "spacing": 10,
+        "icon-size": 18
+    }
+}

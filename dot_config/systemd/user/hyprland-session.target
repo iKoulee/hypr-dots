@@ -1,0 +1,4 @@
+[Unit]
+Description=Hyprland session
+Documentation=https://wiki.hypr.land/
+Wants=waybar.service hyprpaper.service

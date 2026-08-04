@@ -1,0 +1,9 @@
+show=drun
+prompt=Vyhledat aplikaci...
+width=500
+height=400
+allow_markup=true
+allow_images=true
+image_size=24
+term=kitty
+hide_scroll=true

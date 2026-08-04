@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+# Nix binaries (needed when launched from a display manager without sourcing .profile)
+export PATH="$HOME/.nix-profile/bin:$PATH"
+
+# 1. Vynucení cest k systémovým GBM ovladačům (Doplnění pro nixGL)
+export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu/gbm:$LD_LIBRARY_PATH
+export GBM_BACKENDS_PATH=/usr/lib/x86_64-linux-gnu/gbm
+
+# Specifické proměnné pro chod Waylandu na NVIDIA kartách
+export LIBVA_DRIVER_NAME=nvidia
+export XDG_SESSION_TYPE=wayland
+export GBM_BACKEND=nvidia-drm
+export __GLX_VENDOR_LIBRARY_NAME=nvidia
+
+# Spuštění Hyprlandu z Nixu
+exec $HOME/.nix-profile/bin/Hyprland
+#exec $HOME/.nix-profile/bin/start-hyprland

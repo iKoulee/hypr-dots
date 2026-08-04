@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Hyprland (Nix)
+Comment=An dynamic tiling Wayland compositor powered by Nix
+Exec=/home/kuba/.local/bin/start-hyprland-nix
+Type=Application
+DesktopNames=Hyprland
+Keywords=wm;tiling;

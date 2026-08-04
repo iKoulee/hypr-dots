@@ -41,7 +41,8 @@ local fileManager = "nautilus"
 -- Hyprland's PATH (started via GDM -> start-hyprland-nix) doesn't include
 -- it, so a bare command name fails silently.
 local nixBin      = os.getenv("HOME") .. "/.nix-profile/bin/"
-local menu        = nixBin .. "hyprlauncher"
+-- local menu        = nixBin .. "hyprlauncher"
+local menu        = nixBin .. "wofi --show drun"
 
 
 -------------------
@@ -94,6 +95,49 @@ hl.env("HYPRCURSOR_SIZE", "24")
 -- hl.permission("/usr/(bin|local/bin)/hyprpm", "plugin", "allow")
 
 
+-------------------------
+---- CUSTOM LAYOUTS  ----
+-------------------------
+
+-- "thirds" — svislé sloupce po třetinách místo binárního dělení dwindle.
+-- Na 5120x1440 jsou tři sloupce použitelná šířka; dwindle by na třetím okně
+-- dal 50/25/25. Čtvrté a další okno se stackuje vertikálně ve svém sloupci.
+--
+-- API viz `HL.LayoutProvider` / `HL.LayoutContext` v
+-- ~/.nix-profile/share/hypr/stubs/hl.meta.lua — registrace musí proběhnout
+-- dřív, než na layout ukáže general.layout níž.
+--
+-- Dvě pasti:
+--   1. Registrované jméno dostane prefix `lua:`, takže general.layout musí být
+--      "lua:thirds". Na neznámé jméno Hyprland tiše spadne na dwindle.
+--   2. Druhá registrace stejného jména hodí chybu a utne vyhodnocení zbytku
+--      configu — proto pcall, aby `hyprctl reload` prošel. Důsledek: tělo
+--      recalculate se za běhu už nepřepíše, změny se projeví až po restartu
+--      Hyprlandu (nebo registrací pod jiným jménem).
+pcall(hl.layout.register, "thirds", {
+    recalculate = function(ctx)
+        local n = #ctx.targets
+        if n == 0 then return end
+
+        local cols = math.min(n, 3)
+
+        for i, target in ipairs(ctx.targets) do
+            local col  = (i - 1) % cols + 1              -- sloupec 1..cols
+            local row  = math.floor((i - 1) / cols) + 1  -- řádek uvnitř sloupce
+            local rows = math.floor((n - col) / cols) + 1
+
+            -- ctx:column(i, n) vrátí i-tý z n stejně širokých sloupců plochy.
+            -- Gapy si Hyprland dopočítá sám nad vráceným boxem, neodečítat.
+            local box = ctx:column(col, cols)
+            box.h = box.h / rows
+            box.y = box.y + box.h * (row - 1)
+
+            target:place(box)
+        end
+    end,
+})
+
+
 -----------------------
 ---- LOOK AND FEEL ----
 -----------------------
@@ -117,7 +161,7 @@ hl.config({
         -- Please see https://wiki.hypr.land/Configuring/Advanced-and-Cool/Tearing/ before you turn this on
         allow_tearing = false,
 
-        layout = "dwindle",
+        layout = "lua:thirds",
     },
 
     decoration = {
@@ -221,7 +265,7 @@ hl.config({
 
 hl.config({
     misc = {
-        force_default_wallpaper = -1,    -- Set to 0 or 1 to disable the anime mascot wallpapers
+        force_default_wallpaper = 0,    -- Set to 0 or 1 to disable the anime mascot wallpapers
         disable_hyprland_logo   = false, -- If true disables the random hyprland logo / anime girl background. :(
     },
 })
@@ -272,7 +316,6 @@ local mainMod = "SUPER" -- Sets "Windows" key as main modifier
 
 -- Example binds, see https://wiki.hypr.land/Configuring/Basics/Binds/ for more
 hl.bind(mainMod .. " + Q", hl.dsp.exec_cmd(terminal))
-hl.bind(mainMod .. " + D", hl.dsp.exec_cmd(nixBin .. "wofi --show drun"))
 -- local closeWindowBind = hl.bind(altMod .. " + F4", hl.dsp.window.close())
 -- closeWindowBind:set_enabled(false)
 -- Ukončení Hyprlandu. Nativní dispatcher, ne oklika přes `hyprctl dispatch` —

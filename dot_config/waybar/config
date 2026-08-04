@@ -50,7 +50,7 @@
     },
 
     "hyprland/language": {
-        "format": " {}",
+        "format": "{}",
         "format-en": "US",
         "format-cs": "CZ"
     }, 

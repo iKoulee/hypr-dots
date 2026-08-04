@@ -6,6 +6,7 @@ Hyprland dotfiles (Hyprland, Waybar, Wofi, systemd user services) nasazované p�
 
 - Nix (balíčkovací systém) — na tomto stroji je Nix v novém `nix profile` režimu, ne starém `nix-env`
 - SSH klíč zaregistrovaný na GitHubu (repo se klonuje/pushuje přes SSH: `git@github.com:iKoulee/hypr-dots.git`)
+- PipeWire/WirePlumber včetně `wpctl` a `pw-dump`, plus `jq` — používá je přepínač audio výstupů `~/.local/bin/hypr-audio-menu` (`Super+Shift+A`, nebo `just audio`). Na běžné distribuci jsou to systémové balíčky, čerstvá instalace je ale mít nemusí.
 
 ## Instalace chezmoi + just
 

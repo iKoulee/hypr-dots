@@ -48,6 +48,10 @@ window#waybar {
     color: #89dceb;
 }
 
+#pulseaudio.muted {
+    color: #f38ba8;
+}
+
 /* Workspaces */
 #workspaces {
     margin: 5px 8px;

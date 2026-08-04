@@ -29,6 +29,10 @@ reload:
 restart-waybar:
     systemctl --user restart waybar.service
 
+# Otevřít přepínač audio výstupů (test bez klávesové zkratky)
+audio:
+    ~/.local/bin/hypr-audio-menu output
+
 # První nasazení na nový stroj: apply + enable
 bootstrap: apply enable-services
     @echo "Bootstrap dokončen."

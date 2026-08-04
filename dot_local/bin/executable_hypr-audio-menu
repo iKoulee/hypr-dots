@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# Přepínač audio zařízení přes wofi.
+#
+# Použití: hypr-audio-menu [output|input]
+#
+# Přepíná výchozí PipeWire sink (output) nebo source (input). Běžící streamy
+# se přesunou samy — WirePlumber má linking.follow-default-target = true.
+set -euo pipefail
+
+# wofi je jen v Nix profilu; při startu z display manageru se .profile nenačte
+export PATH="$HOME/.nix-profile/bin:$PATH"
+
+readonly DEVICES_CONF="${XDG_CONFIG_HOME:-$HOME/.config}/hypr-audio/devices.conf"
+
+mode="${1:-output}"
+case "$mode" in
+    output) media_class="Audio/Sink";   default_key="default.audio.sink";   prompt="Výstup zvuku"; fallback_icon="" ;;
+    input)  media_class="Audio/Source"; default_key="default.audio.source"; prompt="Vstup zvuku";  fallback_icon="" ;;
+    *) echo "Použití: $(basename "$0") [output|input]" >&2; exit 2 ;;
+esac
+
+# Jeden snapshot pro seznam zařízení i pro zjištění aktuálního výchozího.
+# wpctl status se neparsuje — je lokalizovaný podle locale.
+dump="$(pw-dump)"
+
+current="$(jq -r --arg key "$default_key" '
+    .[] | select(.type == "PipeWire:Interface:Metadata")
+        | .metadata[]? | select(.key == $key) | .value.name
+' <<<"$dump")"
+
+# Přezdívka podle prvního glob patternu, který sedí na node.name.
+# Vrací "ikona|název"; prázdný výstup = žádný match.
+lookup_nickname() {
+    local node_name="$1" pattern icon label
+    [[ -r "$DEVICES_CONF" ]] || return 0
+    while IFS='|' read -r pattern icon label; do
+        [[ -z "$pattern" || "$pattern" == \#* ]] && continue
+        # shellcheck disable=SC2053 # glob match je záměr
+        if [[ "$node_name" == $pattern ]]; then
+            printf '%s|%s' "$icon" "$label"
+            return 0
+        fi
+    done <"$DEVICES_CONF"
+}
+
+labels=()
+ids=()
+
+while IFS=$'\t' read -r id node_name description; do
+    [[ -n "$id" ]] || continue
+
+    icon="$fallback_icon"
+    name="$description"
+    if nickname="$(lookup_nickname "$node_name")" && [[ -n "$nickname" ]]; then
+        icon="${nickname%%|*}"
+        name="${nickname#*|}"
+    fi
+
+    # Aktuální zařízení odlišené odrážkou; ostatní dostanou mezeru, ať sedí sloupce
+    marker=" "
+    [[ "$node_name" == "$current" ]] && marker="●"
+
+    labels+=("$marker $icon  $name")
+    ids+=("$id")
+done < <(jq -r --arg class "$media_class" '
+    .[] | select(.info.props."media.class" == $class)
+        | [ .id,
+            .info.props."node.name",
+            (.info.props."node.description" // .info.props."node.nick" // .info.props."node.name") ]
+        | @tsv
+' <<<"$dump" | sort -n)
+
+if [[ ${#ids[@]} -eq 0 ]]; then
+    echo "Nenalezeno žádné audio zařízení ($media_class)." >&2
+    exit 1
+fi
+
+# Globální wofi config má natvrdo show=drun, proto explicitní flagy.
+# Styl se dědí z ~/.config/wofi/style.css, takže vzhled sedí s launcherem.
+selected="$(printf '%s\n' "${labels[@]}" | wofi \
+    --show dmenu \
+    --prompt "$prompt" \
+    --width 500 \
+    --height 300 \
+    --insensitive)" || exit 0
+
+# Esc nebo zavření bez výběru
+[[ -n "$selected" ]] || exit 0
+
+for i in "${!labels[@]}"; do
+    if [[ "${labels[$i]}" == "$selected" ]]; then
+        wpctl set-default "${ids[$i]}"
+        # Zpětná vazba je best-effort: dokud neběží notifikační démon, notify-send
+        # selže a jen si postěžuje na stderr — přepnutí to nesmí shodit
+        if command -v notify-send >/dev/null 2>&1; then
+            notify-send -a "hypr-audio" -i audio-volume-high "$prompt" "${selected# }" 2>/dev/null || true
+        fi
+        exit 0
+    fi
+done
+
+echo "Neznámý výběr: $selected" >&2
+exit 1

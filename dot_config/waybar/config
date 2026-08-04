@@ -5,7 +5,7 @@
     "spacing": 8,
     "modules-left": ["hyprland/workspaces"],
     "modules-center": ["clock"],
-    "modules-right": ["tray", "cpu", "memory", "network", "language", "pulseaudio"],
+    "modules-right": ["tray", "cpu", "memory", "network", "hyprland/language", "pulseaudio"],
     
     "hyprland/workspaces": {
         "format": "{icon}",
@@ -52,7 +52,10 @@
         "format-icons": {
             "default": ["", "", ""]
         },
-        "on-click": "pavucontrol"
+        "tooltip-format": "{desc}",
+        "scroll-step": 5,
+        "on-click": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
+        "on-click-right": "$HOME/.local/bin/hypr-audio-menu output"
     },
     
     "tray": {

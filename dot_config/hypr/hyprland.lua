@@ -37,7 +37,11 @@ hl.monitor({
 -- Set programs that you use
 local terminal    = "kitty"
 local fileManager = "nautilus"
-local menu        = "hyprlauncher"
+-- Absolute path: these binaries live only in the Nix user profile, and
+-- Hyprland's PATH (started via GDM -> start-hyprland-nix) doesn't include
+-- it, so a bare command name fails silently.
+local nixBin      = os.getenv("HOME") .. "/.nix-profile/bin/"
+local menu        = nixBin .. "hyprlauncher"
 
 
 -------------------
@@ -268,7 +272,7 @@ local mainMod = "SUPER" -- Sets "Windows" key as main modifier
 
 -- Example binds, see https://wiki.hypr.land/Configuring/Basics/Binds/ for more
 hl.bind(mainMod .. " + Q", hl.dsp.exec_cmd(terminal))
-hl.bind(mainMod .. " + D", hl.dsp.exec_cmd("wofi --show drun"))
+hl.bind(mainMod .. " + D", hl.dsp.exec_cmd(nixBin .. "wofi --show drun"))
 -- local closeWindowBind = hl.bind(altMod .. " + F4", hl.dsp.window.close())
 -- closeWindowBind:set_enabled(false)
 hl.bind(mainMod .. " + M", hl.dsp.exec_cmd("command -v hyprshutdown >/dev/null 2>&1 && hyprshutdown || hyprctl dispatch 'hl.dsp.exit()'"))

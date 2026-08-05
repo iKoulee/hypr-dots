@@ -71,6 +71,18 @@ test-notify:
 audio:
     ~/.local/bin/hypr-audio-menu output
 
+# Screenshot výřezu myší (test bez klávesové zkratky)
+screenshot:
+    ~/.local/bin/hypr-screenshot region save
+
+# Screenshot výřezu rovnou do anotačního editoru satty
+screenshot-edit:
+    ~/.local/bin/hypr-screenshot region edit
+
+# Otevřít adresář se screenshoty
+screenshots:
+    xdg-open "$(xdg-user-dir PICTURES)/Screenshots"
+
 # První nasazení na nový stroj: apply + enable
 bootstrap: apply enable-services enable-keyring-integration
     @echo "Bootstrap dokončen."

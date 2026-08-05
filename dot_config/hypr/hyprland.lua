@@ -90,9 +90,18 @@ hl.env("HYPRCURSOR_SIZE", "24")
 --   },
 -- })
 
--- hl.permission("/usr/(bin|local/bin)/grim", "screencopy", "allow")
--- hl.permission("/usr/(lib|libexec|lib64)/xdg-desktop-portal-hyprland", "screencopy", "allow")
--- hl.permission("/usr/(bin|local/bin)/hyprpm", "plugin", "allow")
+-- Zapnuté to není (enforce_permissions má default false), takže pravidla níž
+-- jsou no-op — clientPermissionMode vrací rovnou ALLOW. Než to zapneš:
+--   * první argument je RE2 regex proti cestě binárky klienta, a na tomhle
+--     stroji jde všechno z nixu, ne z /usr/bin. Hash v cestě se mění s každou
+--     aktualizací, proto zobecněný /nix/store/[^/]+/…
+--   * pravidla se aplikují jen při prvním načtení configu (isFirstLaunch),
+--     takže `just reload` je neprojeví — chce to restart Hyprlandu.
+-- Screenshoty (grim) portál nepotřebují, mluví se screencopy protokolem přímo.
+
+-- hl.permission("/nix/store/[^/]+/bin/grim",                        "screencopy", "allow")
+-- hl.permission("/nix/store/[^/]+/libexec/xdg-desktop-portal-hyprland", "screencopy", "allow")
+-- hl.permission("/nix/store/[^/]+/bin/hyprpm",                      "plugin",     "allow")
 
 
 -------------------------
@@ -343,6 +352,76 @@ hl.bind(mainMod .. " + CTRL + N",  hl.dsp.exec_cmd(nixBin .. "makoctl restore"))
 -- Přepínač do-not-disturb; skript navíc překreslí indikátor ve waybaru.
 hl.bind(mainMod .. " + ALT + N",   hl.dsp.exec_cmd(os.getenv("HOME") .. "/.local/bin/hypr-dnd toggle"))
 
+-- Screenshoty (grim + slurp + satty). Print otevře submap, jedna klávesa udělá
+-- snímek a submap se sám zavře. Skript se volá přes ~/.local/bin, ne nixBin —
+-- PATH si řeší sám.
+--
+-- hl.define_submap(jméno, reset, fn): druhý argument je jméno submapu, do
+-- kterého se skočí po vykonání libovolného bindu uvnitř, ne klávesa. "reset"
+-- znamená návrat do default. Ověřeno ve zdrojácích (LuaBindingsToplevel.cpp),
+-- wiki to nemá.
+--
+-- Na rozdíl od hl.layout.register výš tu pcall potřeba není — reload zahazuje
+-- keybindy i celý Lua stav, takže se nic neregistruje dvakrát a tělo submapu
+-- se dá za běhu přepsat.
+local screenshot = os.getenv("HOME") .. "/.local/bin/hypr-screenshot "
+
+-- Pět režimů, sdílených oběma submapy — liší se jen akcí na konci příkazu.
+-- Odchod do default řeší reset argument v define_submap: po vykonání bindu,
+-- který submap sám nezměnil, se Hyprland vrátí do default. Snímek tedy submap
+-- zavře, zatímco E (přepne submap) v něm zůstane.
+--
+-- Modifikátory uvnitř submapu použít nejde — Hyprland nefiltruje samostatné
+-- stisky modifikátorů, takže Shift stisknutý před klávesou má nejistý modmask.
+-- Proto je "do editoru" druhý submap, ne Shift.
+--
+-- ŽÁDNÝ catchall. Vypadá jako záchranná brzda, ale s Lua bindy je aktivně
+-- škodlivý: `found` se v porovnávací smyčce KeybindManageru pro běžný bind
+-- nenastaví (nastavuje ho až druhá smyčka, která spouští dispatchery), takže
+-- strážce `if (found || …)` je vždy nepravdivý a catchall se spustí *spolu*
+-- s trefeným bindem, ne až když nic netrefí. U snímků to nebylo vidět (reset
+-- je stejně žádoucí), ale E tím přišlo o přechod: submap se hned vrátil do
+-- default. Zvláštní větev `if (k->handler == "submap") break;`, která by tomu
+-- zabránila, se na Lua bindy nevztahuje — ty hlásí handler `__lua`.
+local function screenshotModes(action)
+    hl.bind("R", hl.dsp.exec_cmd(screenshot .. "region "  .. action), { description = "Oblast" })
+    hl.bind("W", hl.dsp.exec_cmd(screenshot .. "window "  .. action), { description = "Aktivní okno" })
+    hl.bind("M", hl.dsp.exec_cmd(screenshot .. "monitor " .. action), { description = "Monitor s fokusem" })
+    hl.bind("A", hl.dsp.exec_cmd(screenshot .. "screen "  .. action), { description = "Celá plocha" })
+    hl.bind("P", hl.dsp.exec_cmd(screenshot .. "pick "    .. action), { description = "Vybrat okno myší" })
+
+    -- Jediné cesty ven pro neznámou klávesu. Bez catchallu v submapu uvízneš,
+    -- dokud jednu z nich nestiskneš — proto nápověda visí s timeoutem 0
+    -- a připomíná Esc.
+    hl.bind("escape", hl.dsp.submap("reset"))
+    hl.bind("Print",  hl.dsp.submap("reset"))
+end
+
+hl.define_submap("screenshot-edit", "reset", function()
+    screenshotModes("edit")
+end)
+
+hl.define_submap("screenshot", "reset", function()
+    hl.bind("E", hl.dsp.submap("screenshot-edit"), { description = "…do editoru (satty)" })
+    screenshotModes("save")
+end)
+
+hl.bind("Print", hl.dsp.submap("screenshot"))
+
+-- Nápověda ke klávesám submapu. Jde přes mako, ne přes hl.notification.create —
+-- nativní overlay se kreslí u pravého okraje monitoru a pozice se nekonfiguruje,
+-- takže na 5120×1440 je mimo zorné pole (stejný důvod jako anchor=top-center
+-- v mako configu).
+hl.on("keybinds.submap", function(name)
+    if name == "screenshot" then
+        hl.exec_cmd(screenshot .. "hint show")
+    elseif name == "screenshot-edit" then
+        hl.exec_cmd(screenshot .. "hint edit")
+    else
+        hl.exec_cmd(screenshot .. "hint hide")
+    end
+end)
+
 -- Move focus with mainMod + arrow keys
 hl.bind(mainMod .. " + left",  hl.dsp.focus({ direction = "left" }))
 hl.bind(mainMod .. " + right", hl.dsp.focus({ direction = "right" }))
@@ -443,6 +522,19 @@ hl.window_rule({
 hl.window_rule({
     name  = "float-keepassxc",
     match = { class = "^org\\.keepassxc\\.KeePassXC$" },
+
+    float  = true,
+    center = true,
+})
+
+-- Satty (anotační editor screenshotů, Print → E). Default layout je lua:thirds,
+-- takže by se editor obrázku naskládal do třetinového sloupce — plovoucí
+-- a vycentrovaný dává smysl, stejný důvod jako u KeePassXC dialogů.
+-- app_id je holé "satty" (ověřeno přes hyprctl clients, ne odhad z D-Bus jména);
+-- dá se přebít flagem --app-id.
+hl.window_rule({
+    name  = "float-satty",
+    match = { class = "^satty$" },
 
     float  = true,
     center = true,

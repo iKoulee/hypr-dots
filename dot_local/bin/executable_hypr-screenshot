@@ -1,0 +1,239 @@
+#!/usr/bin/env bash
+# Screenshoty pro Hyprland: grim (snímek) + slurp (výběr) + satty (anotace).
+#
+# Použití: hypr-screenshot [region|window|monitor|screen|pick] [save|edit]
+#          hypr-screenshot hint [show|edit|hide]
+#          hypr-screenshot last
+#
+#   region  (výchozí) výběr obdélníku myší
+#   window  aktivní okno podle geometrie z hyprctl
+#   monitor monitor s fokusem
+#   screen  všechny monitory najednou
+#   pick    výběr okna myší ze seznamu oken na aktivní ploše
+#
+#   save    (výchozí) uloží soubor, zkopíruje do schránky a pošle notifikaci
+#   edit    pošle snímek do satty; uložení a kopírování udělá Enter v editoru
+#
+#   hint    nápověda k submapu, volá ji hl.on("keybinds.submap") v hyprland.lua
+#   last    vypíše cestu k poslednímu snímku
+#
+# Klávesy jsou submap pod Print v hyprland.lua, ruční spuštění přes justfile.
+# Pozor při ladění: hl.dsp.exec_cmd posílá stdout i stderr do /dev/null, takže
+# selhaný keybind mlčí — testovat vždycky nejdřív z terminálu.
+set -euo pipefail
+
+# grim/slurp/satty/wl-copy jsou jen v Nix profilu; při startu z display manageru
+# se .profile nenačte
+export PATH="$HOME/.nix-profile/bin:$PATH"
+
+readonly APP_NAME="hypr-screenshot"
+readonly FILE_PREFIX="screenshot"
+
+# Barvy výběru — Tokyo Night, stejná paleta jako mako a satty.
+readonly SLURP_BG="#1a1b26a0"
+readonly SLURP_BORDER="#7aa2f7ff"
+readonly SLURP_SELECTION="#7aa2f720"
+
+# ID nápovědné notifikace. Bez něj by se zavírala přes `makoctl dismiss`, což
+# trefí poslední notifikaci — a tou už může být hláška o uloženém snímku.
+readonly HINT_ID_FILE="${XDG_RUNTIME_DIR:-/tmp}/hypr-screenshot-hint.id"
+
+usage() {
+    local name
+    name="$(basename "$0")"
+    echo "Použití: $name [region|window|monitor|screen|pick] [save|edit]" >&2
+    echo "         $name hint [show|edit|hide]" >&2
+    echo "         $name last" >&2
+}
+
+# Zpětná vazba je best-effort: dokud neběží notifikační démon, notify-send
+# selže a jen si postěžuje na stderr — pořízení snímku to nesmí shodit
+notify() {
+    command -v notify-send >/dev/null 2>&1 || return 0
+    notify-send -a "$APP_NAME" "$@" 2>/dev/null || true
+}
+
+# xdg-user-dir zná lokalizované jméno (na tomhle stroji ~/Obrázky). Když chybí
+# nebo vrátí rovnou $HOME (nenakonfigurované user-dirs), spadneme na anglický
+# default — stejný vzor jako ${XDG_CONFIG_HOME:-$HOME/.config} v hypr-audio-menu.
+pictures_dir() {
+    local dir=""
+    if command -v xdg-user-dir >/dev/null 2>&1; then
+        dir="$(xdg-user-dir PICTURES 2>/dev/null || true)"
+    fi
+    if [[ -z "$dir" || "$dir" == "$HOME" ]]; then
+        dir="${XDG_PICTURES_DIR:-$HOME/Pictures}"
+    fi
+    printf '%s' "$dir"
+}
+
+# Poslední komponenta schválně bez diakritiky, ať glob v `last` a cesta
+# v justfile nezávisí na locale. Nadřazený adresář lokalizovaný je (~/Obrázky).
+shot_dir="$(pictures_dir)/Screenshots"
+readonly shot_dir
+
+# grim -g bere "X,Y WxH" v globálních souřadnicích kompozitoru — přesně v těch,
+# které vrací hyprctl. Bez aktivního okna vrátí hyprctl {} a jq nevypíše nic.
+# Souřadnice jsou bez rámečku okna, ten se do snímku nedostane.
+geom_active_window() {
+    hyprctl activewindow -j | jq -r '
+        if .at == null then empty
+        else "\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])" end'
+}
+
+focused_monitor() {
+    hyprctl monitors -j | jq -r 'first(.[] | select(.focused) | .name) // empty'
+}
+
+# Předdefinované obdélníky pro `slurp -r`, tvar "X,Y WxH popisek".
+# Pozor: pole .visible v hyprctl clients NEZNAMENÁ "na aktuální ploše" — okna
+# na neaktivních workspace hlásí visible=true. Filtruje se proto přes
+# activeWorkspace.id z hyprctl monitors.
+window_boxes() {
+    local active
+    active="$(hyprctl monitors -j | jq -c '[.[].activeWorkspace.id]')"
+    hyprctl clients -j | jq -r --argjson active "$active" '
+        .[] | select(.mapped and (.hidden | not)
+                     and (.workspace.id as $id | $active | index($id)))
+            | "\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1]) \(.title)"'
+}
+
+hint_hide() {
+    [[ -r "$HINT_ID_FILE" ]] || return 0
+    makoctl dismiss -n "$(<"$HINT_ID_FILE")" 2>/dev/null || true
+    rm -f "$HINT_ID_FILE"
+}
+
+cmd_hint() {
+    case "${1:-show}" in
+        show|edit)
+            # Napřed zavřít předchozí — přechod screenshot -> screenshot-edit
+            # jinak nechá viset nápovědu s timeoutem 0, kterou už nemáme jak
+            # adresovat.
+            hint_hide
+            command -v notify-send >/dev/null 2>&1 || return 0
+
+            local body="R oblast · W okno · M monitor · A vše · P vybrat okno · E editor · Esc zpět"
+            if [[ "${1:-show}" == "edit" ]]; then
+                body="Do editoru: R oblast · W okno · M monitor · A vše · P vybrat okno · Esc zpět"
+            fi
+
+            # -p vypíše ID přidělené démonem, viz komentář u HINT_ID_FILE.
+            notify-send -a "$APP_NAME" -t 0 -p "Screenshot" "$body" \
+                >"$HINT_ID_FILE" 2>/dev/null || true
+            ;;
+        hide)
+            hint_hide
+            ;;
+        *)
+            usage
+            exit 2
+            ;;
+    esac
+}
+
+cmd_last() {
+    # Neexistující nebo prázdný adresář není chyba, jen se nic nevypíše.
+    ls -1t "$shot_dir/$FILE_PREFIX"-*.png 2>/dev/null | head -1 || true
+}
+
+mode="${1:-region}"
+
+case "$mode" in
+    hint) cmd_hint "${2:-show}"; exit 0 ;;
+    last) cmd_last; exit 0 ;;
+    region|window|monitor|screen|pick) ;;
+    *) usage; exit 2 ;;
+esac
+
+action="${2:-save}"
+case "$action" in
+    save|edit) ;;
+    *) usage; exit 2 ;;
+esac
+
+slurp_colors=(-b "$SLURP_BG" -c "$SLURP_BORDER" -s "$SLURP_SELECTION")
+
+grim_args=()
+case "$mode" in
+    region)
+        # </dev/null je nutné: slurp čte ze stdinu předdefinované obdélníky,
+        # kdykoli stdin není TTY — a z keybindu (exec_cmd jede přes /bin/sh -c)
+        # TTY není. Bez toho čeká na vstup, který nikdy nepřijde.
+        # Esc = zrušení uživatelem, ne chyba → čistý exit 0 (jako Esc ve wofi).
+        geom="$(slurp -d "${slurp_colors[@]}" </dev/null)" || exit 0
+        [[ -n "$geom" ]] || exit 0
+        grim_args=(-g "$geom")
+        ;;
+    pick)
+        boxes="$(window_boxes)"
+        if [[ -z "$boxes" ]]; then
+            notify -u critical "Screenshot" "Žádné okno na aktivní ploše"
+            exit 1
+        fi
+        geom="$(slurp -r "${slurp_colors[@]}" <<<"$boxes")" || exit 0
+        [[ -n "$geom" ]] || exit 0
+        grim_args=(-g "$geom")
+        ;;
+    window)
+        geom="$(geom_active_window)"
+        if [[ -z "$geom" ]]; then
+            notify -u critical "Screenshot" "Žádné aktivní okno"
+            exit 1
+        fi
+        grim_args=(-g "$geom")
+        ;;
+    monitor)
+        name="$(focused_monitor)"
+        if [[ -z "$name" ]]; then
+            notify -u critical "Screenshot" "Nezjištěn monitor s fokusem"
+            exit 1
+        fi
+        grim_args=(-o "$name")
+        ;;
+    screen)
+        # Bez -g i -o = všechny monitory složené do jednoho obrázku.
+        ;;
+esac
+
+mkdir -p "$shot_dir"
+
+# Čistě numerický formát, ať na LC_TIME nezáleží (%x/%X/%b jsou lokalizované).
+# Dvojtečky v názvu souboru nechceme, proto pomlčky i v čase.
+#
+# Razítko má rozlišení na sekundy, takže dva snímky za sebou (typicky z keybindu)
+# by se srazily a druhý by ten první přepsal. Naměřeno, ne teoretická obava.
+target="$shot_dir/$FILE_PREFIX-$(date +%Y-%m-%d_%H-%M-%S).png"
+if [[ -e "$target" ]]; then
+    seq=2
+    while [[ -e "${target%.png}-$seq.png" ]]; do
+        seq=$((seq + 1))
+    done
+    target="${target%.png}-$seq.png"
+fi
+
+case "$action" in
+    save)
+        if ! grim "${grim_args[@]}" "$target"; then
+            notify -u critical "Screenshot selhal" "grim skončil chybou"
+            exit 1
+        fi
+        # wl-copy si data odforkuje do vlastního procesu, skript může skončit.
+        wl-copy --type image/png <"$target"
+        notify -i "$target" "Screenshot uložen" "$(basename "$target") — ve schránce"
+        ;;
+    edit)
+        # satty čte PNG ze stdinu, cílový soubor dostane na CLI — CLI přebíjí
+        # config, takže název vzniká na jednom místě, tady. Vlastní notifikace
+        # satty vypínáme, ať nejsou dvě; zbytek chování je v config.toml.
+        if ! grim "${grim_args[@]}" - \
+            | satty --filename - --output-filename "$target" --disable-notifications; then
+            notify -u critical "Screenshot selhal" "grim nebo satty skončily chybou"
+            exit 1
+        fi
+        # Esc v satty = zrušeno, soubor nevznikne → mlčky končíme.
+        if [[ -f "$target" ]]; then
+            notify -i "$target" "Screenshot uložen" "$(basename "$target") — ve schránce"
+        fi
+        ;;
+esac

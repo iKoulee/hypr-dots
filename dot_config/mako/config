@@ -62,6 +62,15 @@ border-color=#f7768e
 text-color=#f7768e
 default-timeout=0
 
+# Screenshoty posílá ~/.local/bin/hypr-screenshot s -i <cesta k PNG>, což mako
+# vykreslí jako ikonu. Globální max-icon-size=48 by z náhledu udělal ikonku,
+# proto se tady zvedá — a height musí povyrůst s ní, jinak se náhled ořízne.
+# Sekce je záměrně nad [mode=do-not-disturb], aby ho DND pořád schoval.
+[app-name=hypr-screenshot]
+max-icon-size=360
+icon-location=top
+height=460
+
 # Režim do-not-disturb se přepíná přes ~/.local/bin/hypr-dnd (Super+Alt+N
 # nebo klik na modul ve waybaru).
 [mode=do-not-disturb]

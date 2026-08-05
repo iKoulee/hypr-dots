@@ -8,6 +8,7 @@ Hyprland dotfiles (Hyprland, Waybar, Wofi, systemd user services) nasazované p�
 - SSH klíč zaregistrovaný na GitHubu (repo se klonuje/pushuje přes SSH: `git@github.com:iKoulee/hypr-dots.git`)
 - PipeWire/WirePlumber včetně `wpctl` a `pw-dump`, plus `jq` — používá je přepínač audio výstupů `~/.local/bin/hypr-audio-menu` (`Super+Shift+A`, nebo `just audio`). Na běžné distribuci jsou to systémové balíčky, čerstvá instalace je ale mít nemusí.
 - `notify-send` (balíček `libnotify`) a `jq` — potřebné pro notifikace a indikátor do-not-disturb ve waybaru.
+- `xdg-user-dir` (balíček `xdg-user-dirs`) — screenshoty se ukládají do `$(xdg-user-dir PICTURES)/Screenshots`, na lokalizovaném systému tedy `~/Obrázky/Screenshots`.
 
 ## Instalace chezmoi + just
 
@@ -22,6 +23,16 @@ nix profile install nixpkgs#mako
 ```
 
 Bez něj nemá kam doručovat notifikace žádná aplikace — na D-Bus se nikdo nepřihlásí k `org.freedesktop.Notifications` a `notify-send` skončí bez efektu. Ovládání je popsané v sekci Notifikace v `CLAUDE.md`.
+
+## Instalace screenshot nástrojů
+
+```bash
+nix profile install nixpkgs#grim nixpkgs#slurp nixpkgs#satty
+```
+
+`grim` dělá samotný snímek, `slurp` výběr myší, `satty` je anotační editor. `wl-copy` (balíček `wl-clipboard`) už je součástí profilu.
+
+Bez nich klávesa `Print` **mlčky** nic neudělá — Hyprland posílá stdout i stderr spuštěného příkazu do `/dev/null`, takže se chyba nikde neobjeví. Ověřit se to dá spuštěním z terminálu (`just screenshot`). Klávesy a chování jsou popsané v sekci Screenshoty v `CLAUDE.md`.
 
 ## Instalace KeePassXC a polkit agenta
 
@@ -176,6 +187,9 @@ just enable-services   # systemctl --user enable --now všechny session services
 just disable-services  # systemctl --user disable --now všechny session services
 just enable-keyring-integration   # přepnout na openssh agenta místo gcr
 just disable-keyring-integration  # rollback zpět na gcr-ssh-agent
+just screenshot         # snímek výřezu myší (test bez klávesové zkratky)
+just screenshot-edit    # snímek výřezu rovnou do editoru satty
+just screenshots        # otevřít adresář se screenshoty
 just bootstrap          # apply + enable-services + enable-keyring-integration
 just --list             # přehled všech příkazů
 ```
@@ -202,5 +216,7 @@ git push
 Chezmoi source dir (symlink na `~/repos/GitHub/iKoulee/hypr-dots`, viz výše) je stejný git repo jako pracovní kopie — commit/push se dělá běžně v tomto adresáři, žádný extra chezmoi krok není potřeba.
 
 ## Známé problémy
+
+- **Screenshot přes portál (prohlížeč, „sdílet obrazovku") nefunguje.** `xdg-desktop-portal-hyprland` je nainstalovaný, ale nikdy nenaběhne — systemd user `XDG_DATA_DIRS` neobsahuje `~/.nix-profile/share`, takže systémový portál jeho `hyprland.portal` nenajde a jede jen `-gtk`, který na wlroots interaktivní screenshot neumí. Klávesa `Print` a `hypr-screenshot` portál obcházejí (grim mluví se screencopy protokolem přímo), takže fungují.
 
 - **hyprpaper nenačte tapetu z `hyprpaper.conf` automaticky.** Po startu `hyprpaper.service` se v logu objeví `Monitor DP-2 has no target: no wp will be created`, i když `preload`/`wallpaper` řádky v configu jsou správně (ověřeno i s absolutní cestou bez `~`). Zatím nevyřešeno — jde o samostatný, od tohoto deploymentu nezávislý bug (viz `journalctl --user -u hyprpaper.service`). Dočasný obchvat: po startu ručně `hyprctl hyprpaper wallpaper "DP-2,<cesta k obrázku>"`.

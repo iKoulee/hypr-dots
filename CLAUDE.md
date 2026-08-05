@@ -241,6 +241,100 @@ Keybindy v `hyprland.lua` (`makoctl` volaný absolutní cestou přes `nixBin`, s
 
 `just restart-mako` po změně configu, `just test-notify` pro vizuální kontrolu všech tří úrovní priority.
 
+### Screenshoty
+
+Stack je **grim** (snímek) + **slurp** (výběr myší) + **satty** (anotace) + `wl-copy`,
+vše z nixu (`nix profile install nixpkgs#grim nixpkgs#slurp nixpkgs#satty`). Portál se
+obchází — grim mluví se screencopy protokolem přímo.
+
+`dot_local/bin/executable_hypr-screenshot` (nasazeno jako `~/.local/bin/hypr-screenshot`):
+
+- `hypr-screenshot [region|window|monitor|screen|pick] [save|edit]` — dvě poziční hodnoty,
+  stejný idiom jako `hypr-audio-menu`. `save` uloží soubor, zkopíruje do schránky a pošle
+  notifikaci; `edit` pošle snímek do satty, kde uložení a kopírování udělá až Enter.
+- `hypr-screenshot hint [show|edit|hide]` — nápověda k submapu, volá ji `hl.on("keybinds.submap")`
+- `hypr-screenshot last` — cesta k poslednímu snímku
+- Cíl je `$(xdg-user-dir PICTURES)/Screenshots`, na tomhle stroji `~/Obrázky/Screenshots`.
+  Poslední komponenta je schválně bez diakritiky kvůli globu a cestám v justfile.
+- Barvy výběru (slurp) a satty jsou **Tokyo Night**, aby ladily s mako notifikací, která
+  po uložení ukáže náhled. Config satty je `dot_config/satty/config.toml`.
+
+| Zkratka | Akce |
+|---------|------|
+| `Print` | otevře submap `screenshot` |
+| `Print` → `R` | výřez myší |
+| `Print` → `W` | aktivní okno |
+| `Print` → `M` | monitor s fokusem |
+| `Print` → `A` | celá plocha (všechny monitory) |
+| `Print` → `P` | výběr okna myší ze seznamu |
+| `Print` → `E` → `R`/`W`/`M`/`A`/`P` | totéž, ale do satty (Enter uloží a zkopíruje) |
+| `Print` → `Esc` nebo `Print` | odchod ze submapu (jiná klávesa ho nezavře, viz pasti) |
+
+`just screenshot` / `just screenshot-edit` pro test bez zkratky, `just screenshots` otevře
+adresář.
+
+Pasti:
+
+- **`hl.define_submap(jméno, reset, fn)`** — druhý argument je *jméno submapu, do kterého
+  se skočí po vykonání libovolného bindu uvnitř*, ne klávesa. `"reset"` = návrat do default.
+  Ověřeno v `src/config/lua/bindings/LuaBindingsToplevel.cpp`, wiki to nemá.
+- **`pcall` tu potřeba není**, na rozdíl od `hl.layout.register` — reload zahazuje keybindy
+  i celý Lua stav, takže se nic neregistruje dvakrát a tělo submapu se za běhu přepíše.
+- **`catchall` s Lua bindy nepoužívat — spustí se navíc, ne až když nic netrefí.**
+  V porovnávací smyčce `handleKeybinds` se `found` pro běžný bind nenastaví (nastavuje ho
+  až druhá smyčka, která spouští dispatchery), takže strážce `if (found || …)` u catchallu
+  je vždy nepravdivý a catchall skončí v `bindsHit` **spolu** s trefeným bindem — a protože
+  je registrovaný poslední, doběhne po něm. U snímků to není vidět (reset do default je
+  stejně žádoucí), ale přechod `Print` → `E` → `screenshot-edit` tím okamžitě spadl zpátky
+  do default a submap přestal reagovat. Zvláštní větev `if (k->handler == "submap") break;`,
+  která by tomu zabránila, se na Lua bindy nevztahuje: ty hlásí handler `__lua`
+  (`hyprctl binds` je ukazuje jako `dispatcher=__lua`), ne `submap`.
+  **Odchod ze submapu proto zařizuje `reset` argument `define_submap`** — po bindu, který
+  submap sám nezměnil, se Hyprland vrátí do default. Snímek tak submap zavře, zatímco `E`
+  (mění submap) v něm zůstane. Cenou je, že neznámá klávesa submap nezavře; proto nápověda
+  visí s timeoutem 0 a připomíná `Esc`.
+- **Uvnitř submapu žádné modifikátory** — Hyprland nefiltruje samostatné stisky
+  modifikátorů, takže Shift stisknutý před klávesou má nejistý `modmask`. Proto je
+  „do editoru" **druhý submap**, ne Shift.
+- **`hl.dsp.exec_cmd` posílá stdout i stderr do `/dev/null`** (`Executor.cpp`) — selhaný
+  keybind mlčí. Ladit se musí z terminálu, případně dočasně `exec 2> >(logger -t hypr-screenshot)`
+  na začátku skriptu a číst `journalctl -t hypr-screenshot -f`.
+- **`slurp` bez `</dev/null` může viset** — když stdin není TTY (a z keybindu není), čte
+  z něj předdefinované obdélníky.
+- **`.visible` v `hyprctl clients` neznamená „na aktuální ploše"** — okna na neaktivních
+  workspace hlásí `visible=true`. Filtruje se přes `activeWorkspace.id` z `hyprctl monitors`.
+- **Časové razítko má rozlišení na sekundy**, takže dva snímky za sebou by se srazily.
+  Skript proto při kolizi přidá `-2`, `-3`… (naměřeno, ne teoretická obava).
+- **grim snímá oblast obrazovky, ne okno.** V režimech `window`/`pick` se do snímku dostane
+  cokoli, co cílové okno překrývá. `grim -T` (foreign toplevel) by to řešil, ale hyprctl
+  potřebný handle nevystavuje.
+- **Nativní `hl.notification.create` se kreslí u pravého okraje monitoru** a pozice se
+  nekonfiguruje → na 5120×1440 mimo zorné pole. Proto jde nápověda přes mako. Zavírá se
+  adresně přes `makoctl dismiss -n <id>` (ID z `notify-send -p`), protože `dismiss` bez `-n`
+  by trefil poslední notifikaci — a tou už může být hláška o uloženém snímku.
+- **`hl.permission` je no-op**, dokud je `ecosystem:enforce_permissions` vypnuté (default
+  `false`), a pravidla se aplikují jen při prvním načtení configu — `just reload` je
+  neprojeví. Zakomentované příklady v `hyprland.lua` míří na `/nix/store/[^/]+/…`, ne na
+  `/usr/bin`, protože tady jde všechno z nixu.
+- **Známé omezení: `xdg-desktop-portal-hyprland` neběží.** Systemd user `XDG_DATA_DIRS`
+  neobsahuje `~/.nix-profile/share`, takže systémový portál nenajde `hyprland.portal` a jede
+  jen `-gtk`. Screenshot a sdílení obrazovky **z prohlížeče** proto nefungují; `hypr-screenshot`
+  portál nepotřebuje. Oprava = propagace `XDG_DATA_DIRS` + nová service do všech tří seznamů,
+  samostatná změna.
+
+Kontrola po změně submapu:
+
+```bash
+hyprctl binds -j | jq -r '.[] | select(.submap | startswith("screenshot")) | "\(.submap)\t\(.key)\t\(.dispatcher)"'
+```
+
+Očekává se 8 bindů v `screenshot` (E R W M A P escape Print) a 7 v `screenshot-edit`.
+Za běhu `hyprctl submap` — po `Print` musí vrátit `screenshot`, po `E` pak `screenshot-edit`.
+
+Na rozdíl od hyprpaperu a KeePassXC **satty žádné zvláštní zacházení s `LD_LIBRARY_PATH`
+nepotřebuje** — ověřeno, se session hodnotou `/usr/lib/x86_64-linux-gnu` naběhne v pořádku
+(GTK4 4.22.4 v nixu i systému, a GTK nemá runtime kontrolu verzí jako Qt).
+
 ### Keyring a hesla
 
 Password manager je **KeePassXC**, spouštěný jako `keepassxc.service` na

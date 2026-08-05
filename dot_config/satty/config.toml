@@ -1,0 +1,58 @@
+# Satty — anotační editor screenshotů (nix profile install nixpkgs#satty).
+# Volá ho ~/.local/bin/hypr-screenshot v režimu "edit", satty si config najde
+# sám v XDG_CONFIG_DIR/satty/config.toml, takže --config netřeba.
+#
+# Barevné schéma: Tokyo Night, stejné jako mako — po uložení přijde notifikace
+# s náhledem, takže editor a notifikace mají ladit spolu. (Waybar a wofi jedou
+# historicky Catppuccin Mocha, viz poznámka o nejednotné paletě v CLAUDE.md.)
+#
+# Pozor: hodnoty z příkazové řádky přebíjejí tenhle soubor (satty slučuje
+# config a CLI v tomhle pořadí). Proto tu není output-filename — název souboru
+# vzniká na jednom místě, v hypr-screenshot.
+
+[general]
+# Fullscreen ne: na 5120×1440 by editor přes celou plochu byl u výřezu 400×300
+# absurdní. Plovoucí okno zařizuje window rule "float-satty" v hyprland.lua.
+fullscreen = false
+
+# Kopírování dělá wl-clipboard; satty ho hledá v PATH, který mu nastaví
+# hypr-screenshot (~/.nix-profile/bin na začátku).
+copy-command = "wl-copy"
+
+# Enter = zkopírovat + uložit + zavřít. Explicitní "exit" místo early-exit,
+# je to deterministické a nezávisí na tom, co znamená "all" v dané verzi.
+actions-on-enter = ["save-to-clipboard", "save-to-file", "exit"]
+
+# Esc = zahodit. Soubor nevznikne a hypr-screenshot podle toho pozná zrušení.
+actions-on-escape = ["exit"]
+
+# Notifikaci posílá hypr-screenshot (jednotný app-name kvůli mako criteria
+# a náhledu), ať nejsou dvě.
+disable-notifications = true
+
+initial-tool = "arrow"
+primary-highlighter = "block"
+corner-roundness = 12
+
+[font]
+# Stejné písmo jako waybar a mako.
+family = "JetBrainsMono Nerd Font"
+style = "Regular"
+
+[color-palette]
+# Tokyo Night akcenty — v tomhle pořadí se zobrazí v toolbaru.
+palette = [
+    "#f7768e",  # červená
+    "#ff9e64",  # oranžová
+    "#e0af68",  # žlutá
+    "#9ece6a",  # zelená
+    "#7dcfff",  # azurová
+    "#7aa2f7",  # modrá
+    "#bb9af7",  # fialová
+]
+custom = [
+    "#c0caf5",  # popředí
+    "#a9b1d6",
+    "#565f89",
+    "#1a1b26",  # pozadí
+]

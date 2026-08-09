@@ -35,6 +35,16 @@ reload:
 restart-waybar:
     systemctl --user restart waybar.service
 
+# Znovu načíst waybar (config i CSS) bez restartu služby.
+# on-sigusr2 má default "reload", viz waybar(5). Po změně geometrie
+# (width, height, margin) použij radši restart-waybar.
+reload-waybar:
+    pkill -SIGUSR2 waybar
+
+# Log panelu — sem chodí chyby GTK3 CSS ("Theme parsing error") i geometrie
+waybar-log:
+    journalctl --user -u waybar.service -n 60 --no-pager
+
 # Restartovat notifikační démon (po změně dot_config/mako/config)
 restart-mako:
     systemctl --user restart mako.service

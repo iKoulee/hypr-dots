@@ -537,6 +537,22 @@ hl.layer_rule({
     ignore_alpha = 0.6,
 })
 
+-- Waybar. Namespace je doslova "waybar" (ověřeno `hyprctl layers`).
+--
+-- Panel od přechodu na cyberpunk vzhled nekreslí obdélník přes celou šířku:
+-- surface je 2200 px centrovaně, výplň má alfu 0.88 a rohy TL+BR jsou
+-- seříznuté pod 45°. Blur proto potřebuje stejnou ochranu jako HUD —
+-- ignore_alpha 0.6 je pod alfou výplně, takže se rozmazává panel, ale ne
+-- průhledné okolí seříznutých rohů ani prázdno vedle 2200px surface.
+hl.layer_rule({
+    name  = "waybar-blur",
+    match = { namespace = "^waybar$" },
+
+    blur         = true,
+    blur_popups  = true,   -- tooltipy modulů jsou vlastní vrstvy
+    ignore_alpha = 0.6,
+})
+
 -- Hyprland-run windowrule
 hl.window_rule({
     name  = "move-hyprland-run",

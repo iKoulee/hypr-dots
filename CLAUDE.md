@@ -137,12 +137,23 @@ a `just reload`.
 
 ### Color scheme
 
-Barvy jsou definovány přímo v jednotlivých CSS/config souborech — zatím bez centrálního token souboru. **Schéma není jednotné:**
+Schéma je **Tokyo Night** napříč všemi komponentami (`#1a1b26` pozadí, `#c0caf5` text,
+`#7aa2f7` akcent) — mako, satty, control center, waybar i wofi. Catppuccin Mocha, na kterém
+waybar s wofi dřív jely, je pryč.
 
-- `dot_config/mako/config` — **Tokyo Night** (`#1a1b26`, `#c0caf5`, `#7aa2f7`)
-- `dot_config/waybar/style.css`, `dot_config/wofi/style.css` — fakticky **Catppuccin Mocha** (`#1e1e2e`, `#cdd6f4`, `#89b4fa`), přestože dřívější verze tohoto souboru tvrdila Tokyo Night
+Centrální token soubor ale neexistuje a **technicky sdílet nejde**: každý formát umí něco
+jiného. Referenční seznam je `dot_config/quickshell/hypr-hud/Commons/Style.qml`, ostatní ho
+opisují:
 
-Při úpravách drž barvy konzistentní v rámci jednoho souboru; sjednocení palety napříč komponentami zatím nikdo neudělal.
+| soubor | forma tokenu |
+|--------|--------------|
+| `dot_config/quickshell/hypr-hud/Commons/Style.qml` | `readonly property color` (zdroj pravdy) |
+| `dot_config/waybar/style.css`, `dot_config/wofi/style.css` | `@define-color` (GTK3 nemá custom properties) |
+| `dot_config/mako/config` | hexy natvrdo |
+| `dot_config/satty/config.toml` | `[color-palette]` |
+
+Při přidání barvy ji zaveď nejdřív ve `Style.qml` a teprve pak opiš. Satty má navíc
+`#ff9e64` (oranžová), která ve `Style.qml` protějšek nemá.
 
 ### Tapeta (hyprpaper)
 
@@ -195,6 +206,30 @@ commitem `dcbd90b`, který `LD_LIBRARY_PATH` do start hooku doplnil — ne race 
 
 `dot_config/waybar/config` je JSON. Moduly: workspaces (vlevo), clock (střed), tray/cpu/memory/network/language/pulseaudio (vpravo). Vyžaduje **JetBrainsMono Nerd Font**.
 
+`just reload-waybar` po změně CSS (posílá SIGUSR2, jehož default je `reload` — viz
+`waybar(5)`), `just restart-waybar` po změně geometrie, `just waybar-log` na chyby.
+
+#### Geometrie: centrovaný plovoucí panel
+
+Panel není přes celou šířku. `"width": 2200` shodí gtk-layer-shell kotvy LEFT+RIGHT, takže
+se surface vycentruje; `"margin-top": 8` ho odlepí od horní hrany. Naměřeno
+`hyprctl layers`: `x=1460 y=8 w=2200 h=40`.
+
+**Exkluzivní zóna vyjde 48, ne 40.** `margin-top` se do protokolové hodnoty nepromítá —
+waybar pošle exclusive zone = výška = 40 a Hyprland u `singular_anchor = ANCHOR_TOP` dělá
+`usableArea.y += exclusive + marginTop`. Ověřovat přes `hyprctl monitors` (`reserved=[0,48,0,0]`),
+ne odhadem.
+
+Rezervovaný pruh je pořád přes celých 5120 px, i když panel měří 2200 — vlevo a vpravo od něj
+tedy zbude 48px pruh tapety. To je důsledek `exclusive: true` u úzkého surface, ne chyba.
+
+Na geometrii panelu **nezávisí nic dalšího**. `hypr-hud` se posune sám (`exclusiveZone: 0`
++ `ExclusionMode.Normal`, z y=48 na y=56) a mako taky — viz sekce Notifikace, kde je vyvrácená
+dřívější domněnka o vazbě na `outer-margin`.
+
+Obsah zabírá ~1500 px z 2200. Při přetečení layer-shell surface nezvětší, obsah se ořízne
+a GTK zaloguje allocation warning — hlídat `just waybar-log`, hlavně když naroste `#tray`.
+
 **Ikony jsou znaky z private use area a už jednou se reálně ztratily.** Editace nástrojem,
 který PUA znaky nepřenese, je tiše promění v prázdný řetězec — config zůstane platný,
 modul se jen vykreslí bez ikony. Naměřeno 9. 8. 2026, prázdná pole byla v:
@@ -228,28 +263,127 @@ for p in sys.argv[1:]:
 " dot_local/bin/executable_hypr-dnd dot_config/hypr-audio/devices.conf dot_config/waybar/config
 ```
 
-Ikony ve waybaru (escapy `jq` rozbalí, takže tenhle výpis ukazuje skutečné kódové body):
+Ikony ve waybaru (escapy `jq` rozbalí, takže tenhle výpis ukazuje skutečné kódové body).
+Rozsah musí zahrnout i **Plane 15** — `network.format-ethernet` používá `U+F0200`, které
+v BMP není a v JSONu se píše surrogate párem `󰈀`:
 
 ```bash
 jq -r '.. | strings' dot_config/waybar/config \
-  | python3 -c "import sys;[print('U+%04X'%ord(c)) for c in sys.stdin.read() if 0xE000<=ord(c)<=0xF8FF]" \
-  | sort -u
+  | python3 -c "import sys;print(sorted({'U+%04X'%ord(c) for c in sys.stdin.read() if 0xE000<=ord(c)<=0xF8FF or 0xF0000<=ord(c)<=0xFFFFD}))"
 ```
 
 Že písmo glyf opravdu má, ověř přes fontTools — **Nerd Font není kompletní FontAwesome**.
-Chybí například `U+F796` (fa-network-wired), které používá `network.format-ethernet`, takže
-se místo ikony kreslí tofu s hexem; `U+F6A9` (fa-volume-mute) tam taky není, proto je
-`format-muted` na `U+F026` (fa-volume-off).
+`U+F6A9` (fa-volume-mute) v něm není, proto je `format-muted` na `U+F026` (fa-volume-off).
+`U+F796` (fa-network-wired) taky ne a dlouho se kvůli tomu u sítě kreslilo tofu s hexem;
+nahradilo ho `U+F0200` (nf-md-ethernet), ověřené fontTools. Kontrola všech ikon naráz:
+
+```bash
+python3 -c "
+from fontTools.ttLib import TTFont; import os, json
+cm = TTFont(os.path.expanduser('~/.local/share/fonts/JetBrainsMonoNerdFont-Regular.ttf')).getBestCmap()
+def walk(o):
+    if isinstance(o, str): yield from o
+    elif isinstance(o, dict):
+        for v in o.values(): yield from walk(v)
+    elif isinstance(o, list):
+        for v in o: yield from walk(v)
+bad = sorted({c for c in walk(json.load(open('dot_config/waybar/config')))
+              if (0xE000 <= ord(c) <= 0xF8FF or 0xF0000 <= ord(c) <= 0xFFFFD) and ord(c) not in cm}, key=ord)
+print('chybí ve fontu:', ['U+%04X' % ord(c) for c in bad] or 'nic')
+"
+```
 
 ```bash
 python3 -c "from fontTools.ttLib import TTFont; print(0xf0f3 in TTFont('$HOME/.local/share/fonts/JetBrainsMonoNerdFont-Regular.ttf').getBestCmap())"
 ```
+
+#### CSS: GTK3, ne web
+
+Waybar 0.15.0 běží na **GTK3** (gtk+3-3.24.52, gtkmm-3.24.10) — stejně jako wofi 1.5.3,
+takže `dot_config/waybar/style.css` a `dot_config/wofi/style.css` sdílejí jeden recept.
+Naměřená matice podpory:
+
+| funguje | nefunguje |
+|---------|-----------|
+| `background-origin`/`background-clip` per vrstvu, hard stopy `transparent 6px, @fill 6px`, zlomkové px, `repeating-linear-gradient` s úhly, ≥13 vrstev, `calc()`, `:not()`, `:nth-child()`, `alpha()`, `@define-color`, `box-shadow`, `text-shadow`, `-gtk-icon-effect`, `letter-spacing`, `transition` na `background-image` | `clip-path`, `filter`, custom properties (`var()`), `text-transform`, dvojpoziční zarážky `transparent 0 6px` (CSS Images L4 → `Missing closing bracket`), čtyřhodnotové `background-position` |
+
+**Seříznuté rohy proto kreslí gradienty, ne polygon.** Každý rám je osm vrstev
+`background-image`: dvě poloviny výplně na `padding-box` s řezem N−0,6 plus šestidílný obrys
+na `border-box` s řezem N (čtyři 1px proužky hran a dva diagonální pásy). Úhel určuje
+počáteční roh (`135deg` = TL, `225deg` = TR, `45deg` = BL, `315deg` = BR) a pro řez
+s odvěsnami N leží zarážka na **N/√2**, nezávisle na rozměrech prvku. Kompletní odvození
+i tabulka zarážek jsou v komentáři nahoře ve `style.css`.
+
+**Past, na kterou se dá naletět dvakrát:** existuje kratší recept — plná neprůhledná deska
+v barvě stroke a výplň o 1 px odsazená `background-clip: padding-box`. Vypadá elegantně
+a o čtyři vrstvy kratší, ale funguje **jen u neprůhledné výplně**. U průhledné se pod ní
+míchá stroke místo toho, co je za oknem. Naměřeno na obou místech, kde to bylo použito:
+panel na alfě 0,88 vyšel `(29,31,44)` s alfou 255 místo `(26,27,38)` s alfou 224 (blur tím
+ztratil smysl) a `button.active` s výplní 0,16 nad plným `@accent` vyšel jako plný modrý blok.
+Proto je v repu jednotně prstenec, i tam, kde je výplň neprůhledná.
+
+Další věci, které se neodhadují:
+
+- **Procenta v `background-position` počítá GTK z `(plocha − obrázek)`, ne z plochy.**
+  Odsazení 9 px od pravého dolního rohu je `calc(100% - 9px)`, ne `calc(100% - 21px)`.
+- **`:first-child` a `:last-child` jsou nepoužitelné.** GTK3 pseudotřídy jdou po CSS uzlech,
+  ne po viditelnosti, takže skrytý `#mpris` (schová se, když nic nehraje) trvale drží
+  `:first-child` v `.modules-center`. Oddělovače se proto vyjmenovávají podle ID; poslední
+  ve skupině jsou `#clock` a `#pulseaudio`, které se nikdy neschovávají.
+- **`letter-spacing` se nezapočítá do požadované šířky** (aplikuje se až jako Pango atribut),
+  takže `#language` bez `min-width` ořízne „US“ na „U…“.
+- **Glow z HUD se nepřenáší.** `box-shadow` respektuje `border-radius`, ne gradientový řez,
+  takže by kolem seříznutého prvku svítily pravoúhlé rohy. Stav se hlásí barvou obrysu
+  a `text-shadow`. Chromatická aberace nejde vůbec — jeden widget je jeden text.
+- **GTK3 zahodí jen vadnou deklaraci, ne celý soubor.** Překlep v jednom dlouhém
+  `background-image` se projeví neviditelným ostrůvkem, ne pádem. Log kontrolovat vždy.
+
+CSS strom waybaru (potvrzuje ho upstream `style.css` v nix storu, který obsahuje doslova
+`.modules-left > widget:first-child > #workspaces`):
+
+```
+window#waybar
+└ box
+  ├ box.modules-left / .modules-center / .modules-right   <- ostrůvky, vykreslují background
+      └ widget                                            <- GtkEventBox, sem chodí :hover
+          └ #clock / #cpu / #workspaces / #tray / #language / …
+              └ button.active / .empty / .urgent          <- jen u #workspaces
+```
+
+Syntaxi jde ověřit bez nasazení, i bez běžícího waybaru:
+
+```bash
+python3 -c "
+import gi; gi.require_version('Gtk','3.0')
+from gi.repository import Gtk
+for f in ('dot_config/waybar/style.css', 'dot_config/wofi/style.css'):
+    e = []; p = Gtk.CssProvider()
+    p.connect('parsing-error', lambda pr, s, er: e.append((s.get_start_line()+1, er.message)))
+    p.load_from_data(open(f, 'rb').read())
+    print(f, 'OK' if not e else e)
+"
+```
+
+Že se to i **vykreslí** správně, ověří až render — `Gtk.OffscreenWindow` se stejným stromem
+uzlů, `win.draw(cr)` do `cairo.ImageSurface(FORMAT_ARGB32)` a odečet pixelů. Právě tak se
+našly obě chyby popsané výš; samotné `parsed clean` o nich nevědělo.
 
 ### App launcher
 
 `Super+R` → `wofi --show drun` (konfigurováno v `dot_config/wofi/`). Volání jde přes `nixBin`,
 protože wofi je jen v Nix profilu. `hyprlauncher` je v profilu taky, ale binding na něj je
 v `hyprland.lua` zakomentovaný.
+
+Vzhled sdílí jazyk s panelem — Tokyo Night, seříznuté rohy, šrafy a rohové tiky. Okno má řez
+TL+BR jako panel waybaru, vstupní pole a položky TR+BL jako dlaždice; technika i pasti jsou
+v sekci Waybar, „CSS: GTK3, ne web“. `#input` je GtkEntry a nese si vlastní téma, takže
+`background-color: transparent` a `box-shadow: none` u něj musí být explicitně.
+
+Jména uzlů jsou v `wofi(7)`, sekce WIDGET LAYOUT:
+`#window > #outer-box > { #input, #scroll > … > #inner-box > #entry > { #img, #text } }`.
+
+Wofi se z `just`/skriptu nespustí, když má prostředí `GDK_BACKEND=x11` — skončí na
+`Failed to connect to wayland compositor`. Pro ruční test `env -u GDK_BACKEND -u DISPLAY wofi --show drun`.
 
 ### Audio
 
@@ -355,7 +489,7 @@ Démon je **mako** (`nix profile install nixpkgs#mako`), spouštěný jako syste
 
 Config `dot_config/mako/config`, dokumentace `man 5 mako`:
 - `anchor=top-center` — na 5120×1440 je výchozí top-right mimo zorné pole
-- `outer-margin=40,10,10,10` — horních 40 px si bere waybar (`height` v `dot_config/waybar/config`); **při změně výšky panelu je potřeba upravit i tohle**
+- `outer-margin=40,10,10,10` — **není to výška waybaru**, i když se to tu dlouho tvrdilo. Mako exkluzivní zónu respektuje samo, takže `outer-margin` je gap navíc *pod* rezervovaným pruhem, ne náhrada za něj. Naměřeno při rezervaci 48 px: `outer-margin=0` → `y=48`, `=10` → `y=58`, `=48` → `y=96`. Hodnota je čistě estetická a **při změně geometrie panelu se tady nesahá na nic**. Namespace vrstvy je mimochodem `notifications`, ne `mako` — `hyprctl layers | grep mako` nic nenajde
 - `layer=top` — notifikace nejdou přes fullscreen okna; pro opak `layer=overlay`
 - criteria podle `urgency`; kritické mají `default-timeout=0`, takže nezmizí samy
 - `on-button-left=dismiss` — pozor, s `actions=1` tím jsou akce notifikací nedostupné; pro jejich zpřístupnění změň na `invoke-default-action`
@@ -496,21 +630,22 @@ jede přes NVIDIA EGL z nixGL. Panel se vykresluje.
 
 #### Umístění a vztah k mako
 
-Naměřeno `hyprctl layers`: waybar `0 0 5120 40`, mako `2342 80 436 100` (top-center),
-panel `3080 48 560 540` na overlay vrstvě. Panel je proto posunutý **800 px vpravo od
-středu** (`Style.hudOffsetX`) — centrovaný by notifikace překryl, protože overlay je nad
-mako vrstvou `top`. Zrcadlení doleva je změna jedné hodnoty na `-800`.
+Naměřeno `hyprctl layers` po přechodu waybaru na centrovaný panel: waybar `1460 8 2200 40`,
+mako (namespace `notifications`) `2342 88 436 …` top-center, panel `3080 56 560 540` na
+overlay vrstvě. Panel je proto posunutý **800 px vpravo od středu** (`Style.hudOffsetX`) —
+centrovaný by notifikace překryl, protože overlay je nad mako vrstvou `top`. Zrcadlení
+doleva je změna jedné hodnoty na `-800`.
 
 Odsazení pod waybarem **není napsané natvrdo**: `exclusionMode: ExclusionMode.Normal`
-s `exclusiveZone: 0` respektuje cizí exkluzivní zóny, takže stačí `margins.top: 8`
-a vyjde `y = 48`. Kdyby `hyprctl layers` ukázal `y = 8`, přepni na `ExclusionMode.Ignore`
-a `margins.top: 48` — a přidej to k místům, kde je výška waybaru natvrdo (`waybar/config`,
-`mako` `outer-margin`).
+s `exclusiveZone: 0` respektuje cizí exkluzivní zóny, takže stačí `margins.top: 8`.
+Ověřeno v praxi — když waybar začal plavat a jeho rezervace vzrostla ze 40 na 48, panel se
+posunul z `y = 48` na `y = 56` sám a nikde se nic nepřepisovalo. Kdyby `hyprctl layers`
+ukázal `y = 8`, znamenalo by to `ExclusionMode.Ignore`.
 
-Blur zařizuje `hl.layer_rule({ name = "hud-blur", match = { namespace = "^hypr-hud$" }, … })`
-v `hyprland.lua` — je to **první vrstva v repu, která si o globální blur řekne**.
-`ignore_alpha = 0.6` je pod alfou výplně panelu (0.88), takže se nerozmazává okolí
-seříznutých rohů.
+Blur zařizuje `hl.layer_rule` v `hyprland.lua`. Vrstvy, které si o globální blur řeknou, jsou
+teď dvě — `hud-blur` (`^hypr-hud$`) a `waybar-blur` (`^waybar$`), obě s `ignore_alpha = 0.6`.
+Práh je pod alfou výplně (HUD 0.88, panel waybaru taky 0.88), takže se rozmazává výplň, ale
+ne průhledné okolí seříznutých rohů — a u waybaru ani prázdno vedle 2200px surface.
 
 #### Vzhled
 

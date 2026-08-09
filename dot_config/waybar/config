@@ -2,7 +2,12 @@
     "layer": "top",
     "position": "top",
     "height": 40,
-    "spacing": 8,
+    "width": 2200,
+    "margin-top": 8,
+    "spacing": 0,
+    "exclusive": true,
+    "fixed-center": true,
+    "reload_style_on_change": true,
     "modules-left": ["hyprland/workspaces"],
     "modules-center": ["mpris", "clock"],
     "modules-right": ["custom/hud", "custom/dnd", "tray", "cpu", "memory", "network", "hyprland/language", "pulseaudio"],
@@ -77,7 +82,7 @@
     },
     
     "network": {
-        "format-ethernet": "\uf796 {ipaddr}",
+        "format-ethernet": "\udb80\ude00 {ipaddr}",
         "format-disconnected": "⚠ Odpojeno",
         "tooltip-format": "{ifname} via {gwaddr}"
     },

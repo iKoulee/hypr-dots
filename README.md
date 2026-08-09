@@ -209,7 +209,9 @@ just diff             # co by se změnilo
 just apply            # nasadit změny
 just status           # aktuální stav nasazených souborů
 just reload            # reload Hyprlandu bez restartu
-just restart-waybar    # restart panelu
+just restart-waybar    # restart panelu (po změně geometrie)
+just reload-waybar     # znovu načíst waybar včetně CSS, bez restartu služby
+just waybar-log        # log panelu — sem chodí chyby GTK3 CSS
 just restart-keepassxc # restart správce hesel (databáze se pak musí znovu odemknout)
 just enable-services   # systemctl --user enable --now všechny session services
 just disable-services  # systemctl --user disable --now všechny session services

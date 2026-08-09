@@ -1,52 +1,254 @@
-window {
-    margin: 0px;
-    border: 2px solid #89b4fa;
-    border-radius: 12px;
-    background-color: rgba(30, 30, 46, 0.95);
+/* Wofi — stejný jazyk jako waybar a control center: Cyberpunk 2077
+ * tvarosloví na paletě Tokyo Night.
+ *
+ * Recept na seříznutý rám je popsaný v dot_config/waybar/style.css a je
+ * tady použitý beze změny (wofi 1.5.3 je taky GTK3). Zkráceně: osm vrstev
+ * background-image — dvě poloviny výplně na padding-box s řezem N - 0,6
+ * a šestidílný obrys na border-box s řezem N (čtyři 1px proužky hran plus
+ * dva diagonální pásy). Zarážka pro řez N px leží na N / sqrt(2).
+ *
+ * Okno má řez TL + BR jako panel waybaru, vstup a položky řez TR + BL jako
+ * dlaždice — stejné střídání, které v HUD dělá skládaný dojem.
+ *
+ * Jména uzlů podle wofi(7), sekce WIDGET LAYOUT:
+ *   #window > #outer-box > { #input, #scroll > … > #inner-box > #entry }
+ * a uvnitř položky #img / #text.
+ */
+
+@define-color bg         #1a1b26;
+@define-color bg-sunken  #16161e;
+@define-color line       #3b4261;
+@define-color text-muted #a9b1d6;
+@define-color text       #c0caf5;
+@define-color accent     #7aa2f7;
+@define-color accent-hot #7dcfff;
+@define-color warn       #e0af68;
+
+* {
     font-family: "JetBrainsMono Nerd Font", sans-serif;
     font-size: 14px;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
 }
 
-#input {
-    margin: 15px;
-    padding: 10px;
-    border: none;
-    border-radius: 8px;
-    color: #cdd6f4;
-    background-color: #313244;
-}
-
-#inner-box {
-    margin: 5px;
-    border: none;
+/* ---- Okno: řez TL + BR = 14 -----------------------------------------
+ *
+ * Výplň je průhledná na 0,96, takže obrys musí být skutečný prstenec —
+ * plná deska v barvě stroke pod výplní by průhlednost zabila. Šrafy
+ * a rohové tiky jsou převzaté z panelu waybaru; právě ony launcher
+ * okamžitě spojí s panelem.
+ */
+#window {
+    border: 1px solid transparent;
     background-color: transparent;
+    color: @text;
+
+    background-image:
+        linear-gradient(alpha(@accent-hot, 0.55), alpha(@accent-hot, 0.55)),
+        linear-gradient(alpha(@accent-hot, 0.55), alpha(@accent-hot, 0.55)),
+        linear-gradient(alpha(@accent-hot, 0.55), alpha(@accent-hot, 0.55)),
+        linear-gradient(alpha(@accent-hot, 0.55), alpha(@accent-hot, 0.55)),
+        repeating-linear-gradient(45deg,
+            alpha(@warn, 0.45) 0px, alpha(@warn, 0.45) 5px,
+            transparent 5px, transparent 13px),
+        linear-gradient(135deg, transparent 8.975px, alpha(@bg, 0.96) 9.975px),
+        linear-gradient(315deg, transparent 8.975px, alpha(@bg, 0.96) 9.975px),
+        linear-gradient(@line, @line),
+        linear-gradient(@line, @line),
+        linear-gradient(@line, @line),
+        linear-gradient(@line, @line),
+        linear-gradient(135deg, transparent 9.4px, @line 9.9px,
+                                @line 10.9px, transparent 11.4px),
+        linear-gradient(315deg, transparent 9.4px, @line 9.9px,
+                                @line 10.9px, transparent 11.4px);
+
+    background-position:
+        9px 9px,
+        9px 9px,
+        calc(100% - 9px) calc(100% - 9px),
+        calc(100% - 9px) calc(100% - 9px),
+        24px 0,
+        left top, right top,
+        right top, right top, left bottom, left bottom,
+        left top, left top;
+
+    background-size:
+        12px 2px,
+        2px 12px,
+        12px 2px,
+        2px 12px,
+        240px 6px,
+        50% 100%, 50% 100%,
+        calc(100% - 14px) 1px, 1px calc(100% - 14px),
+        calc(100% - 14px) 1px, 1px calc(100% - 14px),
+        100% 100%, 100% 100%;
+
+    background-origin:
+        padding-box, padding-box, padding-box, padding-box, padding-box,
+        padding-box, padding-box,
+        border-box, border-box, border-box, border-box,
+        border-box, border-box;
+
+    background-clip:
+        padding-box, padding-box, padding-box, padding-box, padding-box,
+        padding-box, padding-box,
+        border-box, border-box, border-box, border-box,
+        border-box, border-box;
+
+    background-repeat: no-repeat;
 }
 
 #outer-box {
-    margin: 5px;
-    border: none;
+    margin: 0;
+    padding: 8px 0;
     background-color: transparent;
 }
 
-#scroll {
-    margin: 0px;
-    border: none;
+/* ---- Vyhledávací pole: řez TR + BL = 8 ------------------------------
+ *
+ * GtkEntry si nese vlastní téma, takže background-color a box-shadow se
+ * musí vynulovat explicitně, jinak přes ně prosvítá systémový vzhled.
+ * Horní margin 14 nechá vyniknout šrafovaný pás okna.
+ */
+#input {
+    margin: 14px 14px 8px 14px;
+    padding: 8px 12px;
+    border: 1px solid transparent;
+    background-color: transparent;
+    box-shadow: none;
+    color: @text;
+
+    background-image:
+        linear-gradient(45deg,  transparent 4.733px, @bg-sunken 5.733px),
+        linear-gradient(225deg, transparent 4.733px, @bg-sunken 5.733px),
+        linear-gradient(@line, @line),
+        linear-gradient(@line, @line),
+        linear-gradient(@line, @line),
+        linear-gradient(@line, @line),
+        linear-gradient(225deg, transparent 5.16px, @line 5.66px,
+                                @line 6.65px, transparent 7.15px),
+        linear-gradient(45deg,  transparent 5.16px, @line 5.66px,
+                                @line 6.65px, transparent 7.15px);
+
+    background-position:
+        left top, right top,
+        left top, right bottom, right bottom, left top,
+        left top, left top;
+
+    background-size:
+        50% 100%, 50% 100%,
+        calc(100% - 8px) 1px, 1px calc(100% - 8px),
+        calc(100% - 8px) 1px, 1px calc(100% - 8px),
+        100% 100%, 100% 100%;
+
+    background-origin:
+        padding-box, padding-box,
+        border-box, border-box, border-box, border-box,
+        border-box, border-box;
+
+    background-clip:
+        padding-box, padding-box,
+        border-box, border-box, border-box, border-box,
+        border-box, border-box;
+
+    background-repeat: no-repeat;
+}
+
+#input:focus {
+    background-image:
+        linear-gradient(45deg,  transparent 4.733px, @bg-sunken 5.733px),
+        linear-gradient(225deg, transparent 4.733px, @bg-sunken 5.733px),
+        linear-gradient(@accent, @accent),
+        linear-gradient(@accent, @accent),
+        linear-gradient(@accent, @accent),
+        linear-gradient(@accent, @accent),
+        linear-gradient(225deg, transparent 5.16px, @accent 5.66px,
+                                @accent 6.65px, transparent 7.15px),
+        linear-gradient(45deg,  transparent 5.16px, @accent 5.66px,
+                                @accent 6.65px, transparent 7.15px);
+}
+
+#input selection {
+    background-color: alpha(@accent, 0.35);
+    color: @text;
+}
+
+#scroll,
+#inner-box {
+    margin: 0 14px;
+    padding: 0;
+    background-color: transparent;
+}
+
+#entry {
+    margin: 1px 0;
+    padding: 4px 8px;
+    border: 1px solid transparent;
+    background-color: transparent;
+}
+
+/* ---- Vybraná položka: řez TR + BL = 4 -------------------------------
+ *
+ * Výplň je alpha(@accent, 0.16), tedy silně průhledná — proto zase
+ * prstenec, ne plná deska pod výplní. S deskou by z položky byl plný
+ * modrý blok místo tónovaného podkladu s modrým obrysem.
+ */
+#entry:selected {
+    background-image:
+        linear-gradient(45deg,  transparent 1.904px, alpha(@accent, 0.16) 2.904px),
+        linear-gradient(225deg, transparent 1.904px, alpha(@accent, 0.16) 2.904px),
+        linear-gradient(@accent, @accent),
+        linear-gradient(@accent, @accent),
+        linear-gradient(@accent, @accent),
+        linear-gradient(@accent, @accent),
+        linear-gradient(225deg, transparent 2.33px, @accent 2.83px,
+                                @accent 3.82px, transparent 4.32px),
+        linear-gradient(45deg,  transparent 2.33px, @accent 2.83px,
+                                @accent 3.82px, transparent 4.32px);
+
+    background-position:
+        left top, right top,
+        left top, right bottom, right bottom, left top,
+        left top, left top;
+
+    background-size:
+        50% 100%, 50% 100%,
+        calc(100% - 4px) 1px, 1px calc(100% - 4px),
+        calc(100% - 4px) 1px, 1px calc(100% - 4px),
+        100% 100%, 100% 100%;
+
+    background-origin:
+        padding-box, padding-box,
+        border-box, border-box, border-box, border-box,
+        border-box, border-box;
+
+    background-clip:
+        padding-box, padding-box,
+        border-box, border-box, border-box, border-box,
+        border-box, border-box;
+
+    background-repeat: no-repeat;
 }
 
 #text {
-    margin: 5px;
-    border: none;
-    color: #cdd6f4;
-}
-
-#entry:selected {
-    background-color: #45475a;
-    border-radius: 8px;
-    outline: none;
+    margin: 0 6px;
+    padding: 0;
+    color: @text-muted;
 }
 
 #entry:selected #text {
+    color: @accent-hot;
     font-weight: bold;
-    color: #89b4fa;
 }
 
+#img {
+    margin-right: 8px;
+}
+
+#scroll scrollbar,
+#scroll scrollbar slider {
+    background-color: transparent;
+    border: none;
+    min-width: 0;
+}

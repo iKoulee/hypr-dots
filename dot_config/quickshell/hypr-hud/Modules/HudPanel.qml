@@ -47,15 +47,37 @@ PanelWindow {
 
     // Klik mimo panel ho zavře. Pod Hyprlandem je tohle doporučená cesta
     // (hyprland_focus_grab_v1), ne PopupWindow.grabFocus.
+    //
+    // `active` se NESMÍ nabindovat na hud.visible, i když to tak vypadá
+    // přirozeně. Dokumentace říká, že se na true přepne až ve chvíli, kdy grab
+    // opravdu začne, což vyžaduje aspoň jedno *viditelné* okno — v okamžiku,
+    // kdy hud.visible přeskočí na true, ale surface ještě není namapovaný,
+    // takže grab nezačne. A protože se hud.visible pak už nemění, binding se
+    // nikdy nepřevyhodnotí a klik mimo panel nezavře. Navíc do `active` píše
+    // i kompozitor (při zavření grabu), což by binding stejně rozbilo.
+    // Proto imperativně, až po namapování okna.
     HyprlandFocusGrab {
-        active: hud.visible
+        id: focusGrab
         windows: [hud]
         onCleared: hud.visible = false
     }
 
+    // Jedno projití smyčkou událostí nestačí, surface se commituje až po
+    // vykreslení prvního snímku — proto krátký časovač, ne Qt.callLater.
+    Timer {
+        id: grabDelay
+        interval: 50
+        repeat: false
+        onTriggered: if (hud.visible) focusGrab.active = true
+    }
+
     onVisibleChanged: {
-        if (visible)
+        if (visible) {
             scanAnim.restart();
+            grabDelay.restart();
+        } else {
+            focusGrab.active = false;
+        }
         // Stav DND se dá jen číst (mako o změně režimu nic nevysílá), takže
         // se pollinguje — ale jen dokud je panel otevřený.
         Dnd.polling = visible;

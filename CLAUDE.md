@@ -472,6 +472,16 @@ jede přes NVIDIA EGL z nixGL. Panel se vykresluje.
 - **`Commons/Style.qml` potřebuje `import QtQuick`**, jinak načtení skončí na
   `color is not a type` — základní typ `color` a `Qt.rgba` přicházejí odtamtud, ne
   z `Quickshell`.
+- **`HyprlandFocusGrab.active` se nesmí nabindovat na viditelnost okna**, i když to
+  vypadá jako ta nejpřirozenější věc na světě. Dokumentace: *„It will not change to true
+  until the grab begins, which requires at least one visible window."* Ve chvíli, kdy
+  `hud.visible` přeskočí na true, surface ještě není namapovaný → grab nezačne, `active`
+  zůstane false, a protože se `hud.visible` už nemění, binding se nikdy nepřevyhodnotí.
+  Navenek to vypadá, že klik mimo panel prostě nefunguje, a v logu není nic. Do `active`
+  navíc píše i kompozitor při zavření grabu, což by binding rozbilo tak jako tak.
+  Řešení je imperativní nastavení z `Timer`u (50 ms) po `onVisibleChanged` — `Qt.callLater`
+  nestačí, surface se commituje až s prvním snímkem. Diagnostika je
+  `onActiveChanged: console.log(...)`, výstup jde do `journalctl --user -u hypr-hud`.
 - **Binding loop u výběru přehrávače.** Původní „připnutí" (`pinned` odvozené z `player`
   a zároveň do něj vstupující) Qt zahlásilo jako smyčku. Teď je `player` čistě odvozená
   hodnota.

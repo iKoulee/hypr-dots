@@ -19,8 +19,8 @@
     "hyprland/workspaces": {
         "format": "{icon}",
         "format-icons": {
-            "active": "",
-            "default": ""
+            "active": "\uf192",
+            "default": "\uf111"
         },
         "persistent-workspaces": {
             "*": 5
@@ -28,23 +28,23 @@
     },
     
     "clock": {
-        "format": " {:%H:%M}",
+        "format": "\uf017 {:%H:%M}",
         "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>"
     },
     
     "cpu": {
-        "format": " {usage}%",
+        "format": "\uf2db {usage}%",
         "interval": 2,
         "tooltip": true
     },
     
     "memory": {
-        "format": " {}%",
+        "format": "\uf0c9 {}%",
         "interval": 2
     },
     
     "network": {
-        "format-ethernet": " {ipaddr}",
+        "format-ethernet": "\uf796 {ipaddr}",
         "format-disconnected": "⚠ Odpojeno",
         "tooltip-format": "{ifname} via {gwaddr}"
     },
@@ -57,9 +57,9 @@
 
     "pulseaudio": {
         "format": "{icon} {volume}%",
-        "format-muted": "",
+        "format-muted": "\uf026",
         "format-icons": {
-            "default": ["", "", ""]
+            "default": ["\uf026", "\uf027", "\uf028"]
         },
         "tooltip-format": "{desc}",
         "scroll-step": 5,

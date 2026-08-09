@@ -14,8 +14,8 @@ readonly DEVICES_CONF="${XDG_CONFIG_HOME:-$HOME/.config}/hypr-audio/devices.conf
 
 mode="${1:-output}"
 case "$mode" in
-    output) media_class="Audio/Sink";   default_key="default.audio.sink";   prompt="Výstup zvuku"; fallback_icon="" ;;
-    input)  media_class="Audio/Source"; default_key="default.audio.source"; prompt="Vstup zvuku";  fallback_icon="" ;;
+    output) media_class="Audio/Sink";   default_key="default.audio.sink";   prompt="Výstup zvuku"; fallback_icon="" ;;
+    input)  media_class="Audio/Source"; default_key="default.audio.source"; prompt="Vstup zvuku";  fallback_icon="" ;;
     *) echo "Použití: $(basename "$0") [output|input]" >&2; exit 2 ;;
 esac
 

@@ -16,8 +16,8 @@ export PATH="$HOME/.nix-profile/bin:$PATH"
 readonly WAYBAR_SIGNAL=8
 readonly MODE="do-not-disturb"
 
-readonly ICON_ON=""   # notifikace zapnuté
-readonly ICON_OFF=""  # DND
+readonly ICON_ON=""   # notifikace zapnuté
+readonly ICON_OFF=""  # DND
 
 # Vypíše jeden řádek JSON pro waybar. Bez tooltipu se pole "tooltip" nevynechává,
 # waybar chce vždy stejný tvar.

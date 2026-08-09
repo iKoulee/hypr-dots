@@ -194,6 +194,56 @@ commitem `dcbd90b`, který `LD_LIBRARY_PATH` do start hooku doplnil — ne race 
 
 `dot_config/waybar/config` je JSON. Moduly: workspaces (vlevo), clock (střed), tray/cpu/memory/network/language/pulseaudio (vpravo). Vyžaduje **JetBrainsMono Nerd Font**.
 
+**Ikony jsou znaky z private use area a už jednou se reálně ztratily.** Editace nástrojem,
+který PUA znaky nepřenese, je tiše promění v prázdný řetězec — config zůstane platný,
+modul se jen vykreslí bez ikony. Naměřeno 9. 8. 2026, prázdná pole byla v:
+
+| Soubor | Pole |
+|--------|------|
+| `dot_local/bin/executable_hypr-dnd` | `ICON_ON`, `ICON_OFF` |
+| `dot_config/hypr-audio/devices.conf` | prostřední sloupec u všech čtyř řádků |
+| `dot_local/bin/executable_hypr-audio-menu` | `fallback_icon` pro `output` i `input` |
+| `dot_config/waybar/config` | `pulseaudio.format-muted` |
+
+Obrana je **psát je jako `\uXXXX` escapy, kde to formát dovolí** — v JSON (waybar) a v QML;
+escape přežije jakýkoli textový nástroj a dá se grepnout. V bashi a v `devices.conf` escape
+nejde, tam musí být literální znak a po editaci se **kontroluje hexdumpem**:
+
+```bash
+grep 'ICON_ON=' dot_local/bin/executable_hypr-dnd | od -c
+```
+
+Výpis **literálních** PUA znaků napříč soubory. Pozor na interpretaci: u `hypr-dnd`
+a `devices.conf` musí něco vypsat, jinak ikony zmizely — u `waybar/config` je naopak
+správně prázdný, protože tam jsou escapy (ty ověříš přes `jq`, viz níže):
+
+```bash
+python3 -c "
+import io,sys
+for p in sys.argv[1:]:
+    for i,l in enumerate(io.open(p,encoding='utf-8'),1):
+        c=['U+%04X'%ord(x) for x in l if 0xE000<=ord(x)<=0xF8FF]
+        if c: print(p,i,c)
+" dot_local/bin/executable_hypr-dnd dot_config/hypr-audio/devices.conf dot_config/waybar/config
+```
+
+Ikony ve waybaru (escapy `jq` rozbalí, takže tenhle výpis ukazuje skutečné kódové body):
+
+```bash
+jq -r '.. | strings' dot_config/waybar/config \
+  | python3 -c "import sys;[print('U+%04X'%ord(c)) for c in sys.stdin.read() if 0xE000<=ord(c)<=0xF8FF]" \
+  | sort -u
+```
+
+Že písmo glyf opravdu má, ověř přes fontTools — **Nerd Font není kompletní FontAwesome**.
+Chybí například `U+F796` (fa-network-wired), které používá `network.format-ethernet`, takže
+se místo ikony kreslí tofu s hexem; `U+F6A9` (fa-volume-mute) tam taky není, proto je
+`format-muted` na `U+F026` (fa-volume-off).
+
+```bash
+python3 -c "from fontTools.ttLib import TTFont; print(0xf0f3 in TTFont('$HOME/.local/share/fonts/JetBrainsMonoNerdFont-Regular.ttf').getBestCmap())"
+```
+
 ### App launcher
 
 `Super+D` → `wofi --show drun` (konfigurováno v `dot_config/wofi/`). `Super+R` → `hyprlauncher` (musí být nainstalován zvlášť).

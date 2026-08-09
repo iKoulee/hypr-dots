@@ -21,11 +21,11 @@ status:
 # Povolit a spustit systemd user services
 enable-services:
     systemctl --user daemon-reload
-    systemctl --user enable --now waybar.service hyprpaper.service mako.service keepassxc.service hyprpolkitagent.service playerctld.service
+    systemctl --user enable --now waybar.service hyprpaper.service mako.service keepassxc.service hyprpolkitagent.service playerctld.service hypr-hud.service
 
 # Zakázat systemd user services
 disable-services:
-    systemctl --user disable --now waybar.service hyprpaper.service mako.service keepassxc.service hyprpolkitagent.service playerctld.service
+    systemctl --user disable --now waybar.service hyprpaper.service mako.service keepassxc.service hyprpolkitagent.service playerctld.service hypr-hud.service
 
 # Reload Hyprland konfigurace (bez restartu)
 reload:
@@ -46,6 +46,27 @@ restart-hyprpaper:
 # Restartovat KeePassXC (databáze se pak musí znovu odemknout)
 restart-keepassxc:
     systemctl --user restart keepassxc.service
+
+# Restartovat control center (po změně QML v dot_config/quickshell/hypr-hud)
+restart-hud:
+    systemctl --user restart hypr-hud.service
+
+# Otevřít/zavřít control center (test bez klávesové zkratky)
+hud:
+    ~/.local/bin/hypr-hud toggle
+
+# Zavřít control center (záchranná brzda, kdyby držel klávesnici)
+hud-close:
+    ~/.local/bin/hypr-hud close
+
+# Vypsat registrované IPC cíle a funkce (kontrola po změně shell.qml)
+hud-ipc:
+    ~/.local/bin/hypr-hud show
+
+# Spustit control center na popředí s logy (dvě instance by si přebily IPC cíl)
+hud-debug:
+    systemctl --user stop hypr-hud.service
+    ~/.local/bin/hypr-hud run
 
 # Přepnout na openssh agenta místo gcr (kvůli SSH klíčům z KeePassXC)
 enable-keyring-integration:

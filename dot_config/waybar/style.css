@@ -20,6 +20,7 @@ window#waybar {
 #network,
 #pulseaudio,
 #custom-dnd,
+#custom-hud,
 #tray {
     padding: 0 14px;
     margin: 5px 4px;
@@ -63,6 +64,14 @@ window#waybar {
 
 #pulseaudio.muted {
     color: #f38ba8;
+}
+
+/* Tlačítko control centeru (quickshell), klik = otevřít/zavřít.
+   Teal je v paletě zbylý volný tón — modrá rodina je obsazená workspaces,
+   dnd a pulseaudiem. Modul nemá stav: panel o svém otevření waybaru nic
+   neříká a zjišťovat to pollingem přes `hypr-hud state` nestojí za to. */
+#custom-hud {
+    color: #94e2d5;
 }
 
 /* Indikátor do-not-disturb (mako), klik = přepnutí */

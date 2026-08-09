@@ -34,6 +34,16 @@ nix profile install nixpkgs#grim nixpkgs#slurp nixpkgs#satty
 
 Bez nich klávesa `Print` **mlčky** nic neudělá — Hyprland posílá stdout i stderr spuštěného příkazu do `/dev/null`, takže se chyba nikde neobjeví. Ověřit se to dá spuštěním z terminálu (`just screenshot`). Klávesy a chování jsou popsané v sekci Screenshoty v `CLAUDE.md`.
 
+## Instalace playerctl (přehrávač v panelu)
+
+```bash
+nix profile install nixpkgs#playerctl
+```
+
+Balíček přináší dvě věci a **obě jsou potřeba**: CLI `playerctl` pro multimediální klávesy `XF86Audio*` v Hyprlandu, a démona `playerctld`, který běží jako `playerctld.service`.
+
+Bez démona **waybar modul `mpris` nevidí metadata** — jeho výchozí `"player": "playerctld"` je navzdory dokumentaci doslova D-Bus proxy na tenhle démon, ne „sleduj aktivní přehrávač". D-Bus aktivace z nixu nefunguje, protože session `XDG_DATA_DIRS` neobsahuje `~/.nix-profile/share` (stejná příčina jako u portálu v Známých problémech), proto systemd unit. Ovládání je popsané v sekci Přehrávač (MPRIS) v `CLAUDE.md`.
+
 ## Instalace KeePassXC a polkit agenta
 
 ```bash
@@ -190,6 +200,9 @@ just disable-keyring-integration  # rollback zpět na gcr-ssh-agent
 just screenshot         # snímek výřezu myší (test bez klávesové zkratky)
 just screenshot-edit    # snímek výřezu rovnou do editoru satty
 just screenshots        # otevřít adresář se screenshoty
+just players            # co waybar modul "mpris" právě vidí
+just player-raise       # vyvolat okno aktivního přehrávače
+just restart-playerctld # restart MPRIS proxy démona
 just bootstrap          # apply + enable-services + enable-keyring-integration
 just --list             # přehled všech příkazů
 ```

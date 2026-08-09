@@ -4,7 +4,7 @@
     "height": 40,
     "spacing": 8,
     "modules-left": ["hyprland/workspaces"],
-    "modules-center": ["clock"],
+    "modules-center": ["mpris", "clock"],
     "modules-right": ["custom/dnd", "tray", "cpu", "memory", "network", "hyprland/language", "pulseaudio"],
 
     "custom/dnd": {
@@ -15,7 +15,33 @@
         "on-click": "$HOME/.local/bin/hypr-dnd toggle",
         "tooltip": true
     },
-    
+
+    "mpris": {
+        "format": "{player_icon}  {dynamic}",
+        "format-paused": "{status_icon}  <i>{dynamic}</i>",
+        "player-icons": {
+            "default": "",
+            "firefox": "",
+            "vivaldi": "",
+            "chromium": "",
+            "spotify": "",
+            "youtube-music": ""
+        },
+        "status-icons": {
+            "paused": ""
+        },
+        "dynamic-order": ["title", "artist"],
+        "dynamic-importance-order": ["title", "artist"],
+        "dynamic-separator": "  ·  ",
+        "title-len": 42,
+        "artist-len": 22,
+        "dynamic-len": 56,
+        "min-length": 62,
+        "max-length": 62,
+        "on-click-right": "$HOME/.local/bin/hypr-player raise",
+        "tooltip-format": "{player} — {status}\n{title}\n{artist}\n{album}"
+    },
+
     "hyprland/workspaces": {
         "format": "{icon}",
         "format-icons": {

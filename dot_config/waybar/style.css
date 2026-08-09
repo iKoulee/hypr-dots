@@ -16,6 +16,7 @@ window#waybar {
 #clock,
 #cpu,
 #memory,
+#mpris,
 #network,
 #pulseaudio,
 #custom-dnd,
@@ -31,6 +32,17 @@ window#waybar {
 #clock {
     color: #f38ba8;
     font-weight: bold;
+}
+
+/* Přehrávač (MPRIS). Modul se sám schová, když nehraje žádný přehrávač.
+   Mauve je jediný fialový tón v paletě — hodiny hned vedle jsou červené
+   a modrá rodina je už obsazená (workspaces, dnd, pulseaudio, okraj panelu). */
+#mpris {
+    color: #cba6f7;
+}
+
+#mpris.paused {
+    color: #6c7086;
 }
 
 #cpu {

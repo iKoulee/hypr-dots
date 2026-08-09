@@ -53,7 +53,7 @@ se konfiguruje ručně v GUI — kroky jsou v `README.md`.
 
 ### Autostart: systemd user services (preferovaná metoda)
 
-Waybar, hyprpaper, mako, keepassxc a hyprpolkitagent jsou spravovány jako **systemd user services**, ne spouštěny přímo z Hyprland configu. Řeší to problém s `PATH` při startu z display manageru a umožňuje `systemctl --user restart waybar` bez zásahu do Hyprlandu.
+Waybar, hyprpaper, mako, keepassxc, hyprpolkitagent a playerctld jsou spravovány jako **systemd user services**, ne spouštěny přímo z Hyprland configu. Řeší to problém s `PATH` při startu z display manageru a umožňuje `systemctl --user restart waybar` bez zásahu do Hyprlandu.
 
 Startup sekvence v `hl.on("hyprland.start")`:
 1. `dbus-update-activation-environment` — exportuje `WAYLAND_DISPLAY`, `XDG_CURRENT_DESKTOP`, `HYPRLAND_INSTANCE_SIGNATURE` do D-Bus (nutné pro XDG portaly a tray)
@@ -62,8 +62,8 @@ Startup sekvence v `hl.on("hyprland.start")`:
 
 Unit soubory v `dot_config/systemd/user/`:
 
-- `hyprland-session.target` — seskupuje session services (`Wants=` waybar, hyprpaper, mako, keepassxc, hyprpolkitagent)
-- `waybar.service` / `hyprpaper.service` / `mako.service` / `keepassxc.service` / `hyprpolkitagent.service` — `PartOf=hyprland-session.target`, `Restart=on-failure`
+- `hyprland-session.target` — seskupuje session services (`Wants=` waybar, hyprpaper, mako, keepassxc, hyprpolkitagent, playerctld)
+- `waybar.service` / `hyprpaper.service` / `mako.service` / `keepassxc.service` / `hyprpolkitagent.service` / `playerctld.service` — `PartOf=hyprland-session.target`, `Restart=on-failure`
 
 Nová service pro autostart: vytvoř `.service` s `WantedBy=hyprland-session.target`, přidej ji
 do `Wants=` v targetu **a do seznamů v `enable-services`/`disable-services` v `justfile`** —
@@ -259,7 +259,92 @@ Stack je **PipeWire/WirePlumber**, ovládá se přes `wpctl`. **`pactl` na stroj
 - Skript volá jen `wpctl set-default`. Běžící streamy přesouvat netřeba — WirePlumber má `linking.follow-default-target = true` (ověř přes `wpctl settings`), takže nepinnuté streamy následují změnu samy.
 - `notify-send` je volaný podmíněně. Od zavedení mako (viz sekce Notifikace) se notifikace při přepnutí zařízení reálně zobrazí.
 
-Waybar `pulseaudio` modul: levý klik = mute toggle, pravý klik = přepínač, scroll = hlasitost, tooltip = název zařízení. Multimediální klávesy (`XF86Audio*`) jsou v `hyprland.lua` a jdou taky přes `wpctl`.
+Waybar `pulseaudio` modul: levý klik = mute toggle, pravý klik = přepínač, scroll = hlasitost, tooltip = název zařízení. Multimediální klávesy hlasitosti (`XF86AudioRaiseVolume` a spol.) jsou v `hyprland.lua` a jdou přes `wpctl`; klávesy pro přehrávač (`XF86AudioPlay/Next/Prev`) jdou přes `playerctl`, viz sekce Přehrávač (MPRIS).
+
+### Přehrávač (MPRIS)
+
+Waybar modul **`mpris`** v `modules-center`, vlevo od hodin. Ukazuje, co zrovna hraje —
+Firefox (YouTube Music v tabu), a bez jakékoli změny configu i případný dedikovaný klient
+nebo Spotify. Modul je ve waybaru 0.15.0 z nixu **zkompilovaný** (binárka linkuje
+`libplayerctl.so.2`), takže sám o sobě CLI `playerctl` nepotřebuje.
+
+Stack: `nix profile install nixpkgs#playerctl` — přináší CLI `playerctl` (multimediální
+klávesy) i démona `playerctld`, který běží jako `playerctld.service`.
+
+| Akce | Co dělá |
+|------|---------|
+| levý klik | play/pause (vestavěné) |
+| pravý klik | vyvolat okno přehrávače — `hypr-player raise` |
+| boční tlačítko myši zpět | předchozí skladba (vestavěné, button 8) |
+| boční tlačítko myši vpřed | další skladba (vestavěné, button 9) |
+| prostřední klik | předchozí skladba (vestavěný default) |
+| scroll | nic, u `mpris` se handler nenavěsí |
+| `XF86AudioPlay` / `Pause` | play/pause |
+| `XF86AudioNext` / `Prev` | další / předchozí |
+
+`just players` vypíše, co modul právě vidí, `just player-raise` otestuje pravý klik bez myši,
+`just restart-playerctld` po změně unitu.
+
+Pasti:
+
+- **`"player": "playerctld"` (default) není „sleduj aktivní přehrávač", ale doslova D-Bus proxy
+  na jméno `org.mpris.MediaPlayer2.playerctld`.** Man page tvrdí opak, zdroják
+  `src/modules/mpris/mpris.cpp` staví `playerctl_player_new_from_name` s instancí `"playerctld"`
+  a **žádný fallback nemá** — seznam skutečných přehrávačů slouží jen pro zobrazované jméno,
+  metadata i akce kliku jdou přes proxy. **Bez běžícího `playerctld` modul metadata nevidí.**
+  Naměřeno: `playerctl -p playerctld status` → `No player could handle this command` před
+  spuštěním démona, `Playing` po něm.
+- **Nixová D-Bus aktivace playerctld nefunguje.** Aktivační soubor je
+  v `~/.nix-profile/share/dbus-1/services/`, ale session `XDG_DATA_DIRS` ten adresář neobsahuje
+  (`busctl --user list --activatable | grep playerctld` je prázdné) — **stejná příčina jako
+  u `xdg-desktop-portal-hyprland`**. Proto systemd unit, ne spoléhání na aktivaci.
+- **Boční tlačítka myši jsou vestavěná a v man page nezdokumentovaná.** Ve zdrojáku je natvrdo
+  button 8 = previous, 9 = next. Konfigurovat je netřeba — `on-click-backward` by jen přidalo
+  fork `sh -c` navíc.
+- **Uživatelský `on-click-*` vestavěnou akci nahradí, nespustí navíc** (`return ALabel::handleToggle(e)`
+  je před `builtin_action()`). Proto je přepsaný jen pravý klik, jehož default je „next track".
+- **`tooltip-format` nepodporuje Pango markup** — jde přes `set_tooltip_text()`, ne
+  `set_tooltip_markup()`. `<big>` jako u `clock` by se vypsalo doslova. `\n` funguje.
+  `format` naopak přes `set_markup()` jde, takže `<i>` v `format-paused` funguje.
+- **Metadata escapuje waybar sám** (`Glib::Markup::escape_text` včetně vnitřku `{dynamic}`),
+  takže `&` nebo `<` v názvu skladby panel nerozbije.
+- **Ikony v `player-icons` jsou znaky z private use area.** Při editaci configu přes nástroj,
+  který PUA znaky nepřenese, se z nich stanou prázdné řetězce a modul je tiše vykreslí bez
+  ikony. Kontrola kódových bodů:
+  ```bash
+  jq -r '.mpris."player-icons"[]' dot_config/waybar/config | python3 -c "import sys;[print('U+%04X'%ord(c)) for c in sys.stdin.read() if c!='\n']"
+  ```
+- **`{player}` je jméno bez instance** (`firefox`, ne `firefox.instance_1_214`) — klíče
+  v `player-icons` se píšou takhle. `hypr-player` naopak potřebuje **instanci**, protože z ní
+  skládá bus name; bere ji z `playerctl --list-all`, ne z proxy (přes proxy vrací
+  `{{playerName}}` jen `playerctld`).
+- **Firefox metadata závisí na MediaSession API konkrétního webu.** Netflix hlásí
+  `xesam:title="Netflix"`, prázdného interpreta a `CanGoNext=false` — není to chyba modulu.
+  YouTube Music MediaSession používá. Když by metadata chyběla, ověř `about:config` →
+  `dom.media.mediasession.enabled`.
+- **Modul se sám schová, když nehraje žádný přehrávač** (`event_box_.set_visible(false)`).
+- **`modules-center` centruje celý box**, takže modul posouvá hodiny z geometrického středu.
+  Fixuje to `min-length` == `max-length` == 62; bez nich by hodiny poskakovaly při každé změně
+  skladby. Pro dynamickou šířku stačí oba řádky smazat.
+- **Obal alba se zobrazit nedá** — waybar nemá placeholder pro `mpris:artUrl`.
+
+`dot_local/bin/executable_hypr-player` (nasazeno jako `~/.local/bin/hypr-player`) řeší jen to,
+co `playerctl` neumí — subcommand `raise` neexistuje. Pořadí je **napřed Hyprland, teprve pak
+MPRIS `Raise`**, a to schválně:
+
+- **MPRIS `Raise` na Firefoxu samo o sobě nefunguje.** Firefox ho implementuje přes
+  xdg-activation a Hyprland tu žádost s `misc:focus_on_activate = false` (default) zahodí —
+  okno se nepohne. Zapínat tu volbu globálně kvůli jednomu tlačítku by pustilo ke kradení
+  fokusu všechny aplikace, proto se místo toho hledá okno podle `DesktopEntry` (u Firefoxu
+  `firefox`), s jménem přehrávače jako zálohou.
+- **Návratovým kódům se tu nedá věřit ani v jednom směru.** `busctl … Raise` vrátí úspěch,
+  i když Hyprland aktivaci zahodí, a `hl.dsp.focus` na neexistující okno skončí s exit 0
+  a jen warningem `window not found`. Skript proto **ověřuje výsledek** přes
+  `hyprctl activewindow`, ne exit kód. Právě kvůli tomu původní verze vypadala funkčně
+  v testu, kde bylo cílové okno náhodou už zaostřené.
+- `hyprctl dispatch` bere v 0.56 **Lua** (`hl.dsp.focus({ window = "class:…" })`), ne staré
+  `focuswindow class:…`, a **bez vlastního `hl.dispatch()`** — hyprctl si výraz obaluje sám
+  a dvojité volání hodí `expected a dispatcher`.
 
 ### Notifikace
 

@@ -20,9 +20,14 @@ PanelWindow {
     // Na tohle jméno míří `hl.layer_rule` v hyprland.lua (blur).
     WlrLayershell.namespace: "hypr-hud"
     WlrLayershell.layer: WlrLayer.Overlay
-    // Bez exkluzivní klávesnice by Escape nedorazil. Když je panel zavřený,
-    // fokus se vrací kompozitoru — jinak by si držel klávesnici celou session.
-    WlrLayershell.keyboardFocus: hud.visible ? WlrKeyboardFocus.Exclusive
+    // OnDemand, NE Exclusive. S exkluzivní klávesnicí se sice panel chová
+    // správně jinak, ale Hyprland pak přestane rušit focus grab — klik mimo
+    // panel ho nezavře a nikde o tom není ani řádek v logu. Naměřeno klikem
+    // přes /dev/uinput: Exclusive → panel zůstane otevřený, OnDemand i None →
+    // zavře se. OnDemand je zvolené proto, že si vrstva umí vzít klávesnici
+    // sama, takže Escape funguje i kdyby grab nestihl naběhnout.
+    // Když je panel zavřený, klávesnice se vrací kompozitoru.
+    WlrLayershell.keyboardFocus: hud.visible ? WlrKeyboardFocus.OnDemand
                                              : WlrKeyboardFocus.None
 
     // Normal + exclusiveZone 0 znamená „nic si nerezervuj, ale respektuj cizí

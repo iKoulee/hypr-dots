@@ -472,6 +472,15 @@ jede přes NVIDIA EGL z nixGL. Panel se vykresluje.
 - **`Commons/Style.qml` potřebuje `import QtQuick`**, jinak načtení skončí na
   `color is not a type` — základní typ `color` a `Qt.rgba` přicházejí odtamtud, ne
   z `Quickshell`.
+- **`WlrKeyboardFocus.Exclusive` rozbíjí focus grab.** S exkluzivní klávesnicí Hyprland
+  přestane grab rušit, takže klik mimo panel ho nezavře — a nikde o tom není ani řádek
+  v logu, grab je přitom `active = true`. Naměřeno syntetickým klikem přes `/dev/uinput`
+  (`hl.dsp.cursor.move` na pozici + uinput BTN_LEFT; `wtype` umí jen klávesnici,
+  `ydotool` na stroji není): `Exclusive` → panel zůstane otevřený, `OnDemand` i `None`
+  → zavře se. Používá se **`OnDemand`** — vrstva si umí vzít klávesnici sama, takže
+  Escape funguje i kdyby grab nestihl naběhnout. Zajímavost: i s `None` Escape projde,
+  protože `CFocusGrab::start()` volá `refocusKeyboard()` a klávesnici grabnutému
+  surface přidělí sám.
 - **`HyprlandFocusGrab.active` se nesmí nabindovat na viditelnost okna**, i když to
   vypadá jako ta nejpřirozenější věc na světě. Dokumentace: *„It will not change to true
   until the grab begins, which requires at least one visible window."* Ve chvíli, kdy

@@ -321,11 +321,11 @@ hl.device({
 ---------------------
 
 local mainMod = "SUPER" -- Sets "Windows" key as main modifier
--- local altMod = "ALT" -- Set alternative modifier
+local altMod = "ALT" -- Set alternative modifier
 
 -- Example binds, see https://wiki.hypr.land/Configuring/Basics/Binds/ for more
 hl.bind(mainMod .. " + Q", hl.dsp.exec_cmd(terminal))
--- local closeWindowBind = hl.bind(altMod .. " + F4", hl.dsp.window.close())
+hl.bind(altMod .. " + F4", hl.dsp.window.close())
 -- closeWindowBind:set_enabled(false)
 -- Ukončení Hyprlandu. Nativní dispatcher, ne oklika přes `hyprctl dispatch` —
 -- hyprctl je jen v Nix profilu a při startu z display manageru by nemusel být v PATH.
@@ -456,11 +456,16 @@ hl.bind("XF86AudioMicMute",     hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_S
 hl.bind("XF86MonBrightnessUp",  hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%+"),                  { locked = true, repeating = true })
 hl.bind("XF86MonBrightnessDown",hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%-"),                  { locked = true, repeating = true })
 
--- Requires playerctl
-hl.bind("XF86AudioNext",  hl.dsp.exec_cmd("playerctl next"),       { locked = true })
-hl.bind("XF86AudioPause", hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
-hl.bind("XF86AudioPlay",  hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
-hl.bind("XF86AudioPrev",  hl.dsp.exec_cmd("playerctl previous"),   { locked = true })
+-- Ovládání přehrávače (nix profile install nixpkgs#playerctl). Absolutní cesta
+-- přes nixBin, stejný důvod jako u makoctl — playerctl je jen v Nix profilu
+-- a při startu z display manageru by holé jméno tiše selhalo. Dřív tu holé
+-- jméno bylo a bindy nefungovaly, aniž by to šlo poznat.
+--
+-- Bez repeating: držení klávesy by přeskákalo celý playlist.
+hl.bind("XF86AudioNext",  hl.dsp.exec_cmd(nixBin .. "playerctl next"),       { locked = true })
+hl.bind("XF86AudioPause", hl.dsp.exec_cmd(nixBin .. "playerctl play-pause"), { locked = true })
+hl.bind("XF86AudioPlay",  hl.dsp.exec_cmd(nixBin .. "playerctl play-pause"), { locked = true })
+hl.bind("XF86AudioPrev",  hl.dsp.exec_cmd(nixBin .. "playerctl previous"),   { locked = true })
 
 
 --------------------------------

@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# Doplněk k waybar modulu "mpris" — akce, které playerctl neumí.
+#
+# Použití: hypr-player [raise]
+#
+#   raise  vyvolá okno aktivního MPRIS přehrávače (metoda org.mpris.MediaPlayer2.Raise)
+#
+# Volá ho waybar jako on-click-right u modulu "mpris" (dot_config/waybar/config).
+# playerctl subcommand "raise" nemá, proto tenhle skript.
+set -euo pipefail
+
+# playerctl je jen v Nix profilu; waybar běží jako systemd user service, jejíž PATH
+# nix profil neobsahuje. busctl je systémový, hyprctl zase z nixu.
+export PATH="$HOME/.nix-profile/bin:$PATH"
+
+readonly MPRIS_IFACE="org.mpris.MediaPlayer2"
+readonly MPRIS_PATH="/org/mpris/MediaPlayer2"
+
+usage() {
+    echo "Použití: $(basename "$0") [raise]" >&2
+}
+
+# Vlastnost MPRIS root rozhraní. busctl tiskne "typ hodnota" (např. `b true`
+# nebo `s "firefox"`), proto se první pole zahazuje a uvozovky ořezávají.
+prop() {
+    busctl --user get-property "$1" "$MPRIS_PATH" "$MPRIS_IFACE" "$2" 2>/dev/null \
+        | cut -d' ' -f2- | sed 's/^"//; s/"$//'
+}
+
+# Instance name aktivního přehrávače (firefox.instance_1_214) — z něj se skládá
+# bus name. Bereme první položku z --list-all, protože přesně tu bere i waybar
+# (g_list_first(playerctl_list_players())), takže klik míří na tentýž přehrávač,
+# který je zrovna vidět v panelu.
+#
+# playerctld drží vlastní MPRIS jméno, ale v --list-all se neobjevuje. Filtr je
+# pojistka do budoucna: přes proxy by Raise skončilo na démonovi, ne na okně.
+active_instance() {
+    playerctl --list-all 2>/dev/null | grep -v '^playerctld$' | head -n1
+}
+
+active_class() {
+    hyprctl activewindow -j 2>/dev/null | jq -r '.class // empty'
+}
+
+# Zaostří okno podle class a vrátí 0, jen když se fokus opravdu přesunul.
+#
+# Ověřuje se výsledek, ne návratový kód — ten tady lže v obou směrech:
+# hl.dsp.focus na neexistující okno skončí s exit 0 a jen warningem, a busctl
+# Raise níž uspěje na úrovni D-Bus i tehdy, když Hyprland aktivaci zahodí.
+#
+# hyprctl dispatch bere v 0.56 Lua, ne starou syntaxi — "focuswindow class:…"
+# by skončilo na parse error. Vlastní hl.dispatch() se sem nepíše, hyprctl si
+# výraz obaluje sám a dvojité volání hodí "expected a dispatcher".
+focus_class() {
+    local want="${1,,}" got
+    hyprctl dispatch "hl.dsp.focus({ window = \"class:(?i)^${1}\$\" })" >/dev/null 2>&1 || true
+    got="$(active_class)"
+    [[ "${got,,}" == "$want" ]]
+}
+
+cmd_raise() {
+    local instance bus player desktop before class
+    instance="$(active_instance || true)"
+    if [[ -z "$instance" ]]; then
+        echo "Žádný běžící MPRIS přehrávač." >&2
+        exit 1
+    fi
+    bus="$MPRIS_IFACE.$instance"
+
+    # firefox.instance_1_214 → firefox. Dělí se na ".instance", ne na první tečku:
+    # jména jako com.github.th-ch.youtube-music tečky obsahují.
+    player="${instance%%.instance*}"
+    desktop="$(prop "$bus" DesktopEntry)"
+
+    # Nejdřív Hyprland, teprve pak MPRIS Raise. Firefox implementuje Raise přes
+    # xdg-activation a Hyprland ji s misc:focus_on_activate = false (default)
+    # zahodí — okno se nepohne, ale busctl vrátí úspěch. Zapínat tu volbu
+    # globálně kvůli jednomu tlačítku nechceme, pustila by ke kradení fokusu
+    # všechny aplikace.
+    #
+    # DesktopEntry odpovídá .desktop souboru a u Wayland aplikací obvykle i app-id
+    # okna; jméno přehrávače je záloha, když DesktopEntry chybí nebo nesedí.
+    for class in "$desktop" "$player"; do
+        [[ -n "$class" ]] || continue
+        focus_class "$class" && return 0
+    done
+
+    # Poslední pokus pro přehrávače, jejichž okno se nejmenuje podle DesktopEntry.
+    # Krátká prodleva, než se aktivace projeví — na rozdíl od dispatcheru je to
+    # asynchronní.
+    if [[ "$(prop "$bus" CanRaise)" == "true" ]]; then
+        before="$(active_class)"
+        busctl --user call "$bus" "$MPRIS_PATH" "$MPRIS_IFACE" Raise >/dev/null 2>&1 || true
+        sleep 0.3
+        [[ "$(active_class)" != "$before" ]] && return 0
+    fi
+
+    echo "Okno přehrávače $instance se nepodařilo vyvolat." >&2
+    exit 1
+}
+
+case "${1:-raise}" in
+    raise) cmd_raise ;;
+    *) usage; exit 2 ;;
+esac

@@ -21,11 +21,11 @@ status:
 # Povolit a spustit systemd user services
 enable-services:
     systemctl --user daemon-reload
-    systemctl --user enable --now waybar.service hyprpaper.service mako.service keepassxc.service hyprpolkitagent.service
+    systemctl --user enable --now waybar.service hyprpaper.service mako.service keepassxc.service hyprpolkitagent.service playerctld.service
 
 # Zakázat systemd user services
 disable-services:
-    systemctl --user disable --now waybar.service hyprpaper.service mako.service keepassxc.service hyprpolkitagent.service
+    systemctl --user disable --now waybar.service hyprpaper.service mako.service keepassxc.service hyprpolkitagent.service playerctld.service
 
 # Reload Hyprland konfigurace (bez restartu)
 reload:
@@ -82,6 +82,19 @@ screenshot-edit:
 # Otevřít adresář se screenshoty
 screenshots:
     xdg-open "$(xdg-user-dir PICTURES)/Screenshots"
+
+# Restartovat playerctld (bez něj modul "mpris" ve waybaru nevidí metadata)
+restart-playerctld:
+    systemctl --user restart playerctld.service
+
+# Co waybar modul "mpris" právě vidí (diagnostika metadat)
+players:
+    @~/.nix-profile/bin/playerctl --list-all || echo "žádný MPRIS přehrávač"
+    @~/.nix-profile/bin/playerctl -p playerctld metadata || true
+
+# Vyvolat okno aktivního přehrávače (test pravého kliku ve waybaru)
+player-raise:
+    ~/.local/bin/hypr-player raise
 
 # První nasazení na nový stroj: apply + enable
 bootstrap: apply enable-services enable-keyring-integration

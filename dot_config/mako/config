@@ -2,7 +2,8 @@
 # Dokumentace: man 5 mako
 #
 # Barevné schéma: Tokyo Night (#1a1b26 pozadí, #c0caf5 text, #7aa2f7 akcent).
-# Pozor: waybar a wofi mají v CSS Catppuccin Mocha — viz poznámka v CLAUDE.md.
+# Stejnou paletu jede i waybar, wofi, satty a control center — referenční
+# seznam tokenů je dot_config/quickshell/hypr-hud/Commons/Style.qml.
 
 font=JetBrainsMono Nerd Font 11
 
@@ -18,8 +19,13 @@ border-size=2
 border-radius=12
 
 # outer-margin platí pro celý seznam, margin pro jednotlivé notifikace.
-# Horních 40 px si bere waybar (height v dot_config/waybar/config), takže
-# outer-margin ho odsadí a notifikace panel nepřekrývají.
+#
+# Tohle NENÍ výška waybaru, i když se to tak dlouho tvrdilo. Mako exkluzivní
+# zónu respektuje samo, takže outer-margin je gap navíc POD rezervovaným
+# pruhem, ne náhrada za něj. Naměřeno při rezervaci 48 px:
+#   outer-margin=0 -> y=48    outer-margin=10 -> y=58    outer-margin=48 -> y=96
+# Hodnota je proto čistě estetická a na geometrii panelu nezávisí — při
+# změně výšky waybaru se tady nemusí sahat na nic.
 outer-margin=40,10,10,10
 margin=8
 

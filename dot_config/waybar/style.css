@@ -1,109 +1,511 @@
+/* Waybar — Cyberpunk 2077 tvarosloví na paletě Tokyo Night.
+ *
+ * Sourozenec control centeru: tokeny odpovídají
+ * dot_config/quickshell/hypr-hud/Commons/Style.qml, tvary odpovídají
+ * Widgets/HudFrame.qml a Widgets/CautionStripe.qml. Sdílet se ale nedají —
+ * GTK3 nemá custom properties, jediný token je @define-color.
+ *
+ * Waybar 0.15.0 běží na GTK3 (gtk+3-3.24.52). Z toho plyne všechno níže:
+ * žádný clip-path, žádný filter, žádné var(). Seříznuté rohy proto kreslí
+ * gradienty, ne polygon — viz "Jak se kreslí seříznutý rám".
+ *
+ * CSS strom waybaru (potvrzeno upstream style.css v nix storu, který
+ * obsahuje doslova `.modules-left > widget:first-child > #workspaces`):
+ *
+ *   window#waybar
+ *   └ box
+ *     ├ box.modules-left / .modules-center / .modules-right
+ *         └ widget                   <- GtkEventBox, sem chodí :hover
+ *             └ #clock / #cpu / #workspaces / #tray / #language / …
+ *                 └ button.active / .empty / .urgent   (jen u #workspaces)
+ *
+ * :first-child a :last-child jsou tu NEPOUŽITELNÉ — GTK3 pseudotřídy jdou
+ * po CSS uzlech, ne po viditelnosti, takže skrytý #mpris (schová se, když
+ * nic nehraje) trvale drží :first-child v .modules-center. Oddělovače se
+ * proto vyjmenovávají podle ID.
+ */
+
+/* ---- Paleta: Tokyo Night ------------------------------------------- */
+
+@define-color bg         #1a1b26;   /* základ panelu, shodný s mako */
+@define-color bg-sunken  #16161e;
+@define-color bg-raised  #1f2335;   /* výplň ostrůvku */
+@define-color surface-hi #292e42;   /* hover výplň */
+@define-color line       #3b4261;   /* hairline rám v klidu */
+@define-color text-dim   #565f89;
+@define-color text-muted #a9b1d6;
+@define-color text       #c0caf5;
+@define-color accent     #7aa2f7;
+@define-color accent-hot #7dcfff;   /* HUD azur: rohové tiky, hover */
+@define-color warn       #e0af68;   /* výstražné šrafy, index chip */
+@define-color danger     #f7768e;
+@define-color ok         #9ece6a;
+@define-color media      #bb9af7;
+
+/* Signaturní žlutá Cyberpunku (#fcee0a) se tu — stejně jako v HUD —
+ * záměrně nepoužívá; její roli dělí @warn (ornament) a @accent-hot
+ * (interaktivní). Zdůvodnění je v Commons/Style.qml. */
+
+/* ---- Jak se kreslí seříznutý rám ------------------------------------
+ *
+ * GTK3 neumí polygon, takže se každý rám skládá z osmi vrstev
+ * background-image: dvě poloviny výplně a šestidílný obrys (čtyři 1px
+ * proužky hran + dva diagonální pásy).
+ *
+ * Mapování úhel -> počáteční roh gradientu:
+ *   135deg = TL     225deg = TR     45deg = BL     315deg = BR
+ * Bod ve vzdálenosti d od rohu podél osy leží na kolmici, takže pro řez
+ * s odvěsnami N px platí d = N / sqrt(2) — nezávisle na rozměrech prvku.
+ * Hard stop dá schodovitou diagonálu, proto se zarážky rozestupují
+ * o +-0,5 px kolem d.
+ *
+ * Výplň je jen dvě poloviny, ne čtyři kvadranty: řezané rohy jsou vždy
+ * protilehlé, takže půlka vlevo ošetří jeden a půlka vpravo druhý. Jeden
+ * šev uprostřed místo dvou, a při sudé šířce žádný.
+ * Výplň jede na padding-box s řezem N' = N - 0,6; obrys na border-box
+ * s řezem N. Kolmá vzdálenost obou diagonál je pak (N' + 2)/sqrt(2)
+ * - N/sqrt(2) = 1 px, což je ta hairline.
+ *
+ * POZOR na alternativní recept "plná deska v barvě stroke, výplň o 1 px
+ * odsazená". Vypadá jednodušeji a o čtyři vrstvy kratší, ale funguje jen
+ * u NEPRŮHLEDNÉ výplně — jinak se pod výplní míchá stroke místo toho, co
+ * je za oknem. Naměřeno: panel na alpha 0,88 vyšel (29,31,44) místo
+ * (26,27,38) a s alfou 255, takže blur ztratil smysl; `button.active`
+ * s výplní 0,16 nad plným @accent vyšel jako plný modrý blok. Proto je
+ * tady jednotně prstenec, i tam, kde je výplň neprůhledná.
+ *
+ * Zarážky (řez N -> výplň N', pás obrysu):
+ *
+ *   prvek                N     výplň            pás obrysu
+ *   panel                14    8.975 -> 9.975   9.4 / 9.9 / 10.9 / 11.4
+ *   ostrůvek              8    4.733 -> 5.733   5.16 / 5.66 / 6.65 / 7.15
+ *   tlačítko workspace    4    1.904 -> 2.904   2.33 / 2.83 / 3.82 / 4.32
+ *   index chip            3    1.197 -> 2.197   1.62 / 2.12 / 3.11 / 3.61
+ *
+ * Diagonální pás se nemusí omezovat na kvadrant: přímka x+y = 14 protne
+ * box 2200x38 jen u rohu TL, dál je x+y > 14 všude.
+ *
+ * Past: GTK počítá procenta v background-position z (plocha - obrázek),
+ * ne z plochy. Odsazení 9 px od pravého dolního rohu se proto píše
+ * `calc(100% - 9px)`, ne `calc(100% - 21px)`.
+ */
+
 * {
-    /* Je nutné mít nainstalovaný Nerd Font pro správné zobrazení ikon */
     font-family: "JetBrainsMono Nerd Font", "Font Awesome 6 Free", sans-serif;
-    font-size: 14px;
+    font-size: 13px;
     border: none;
     border-radius: 0;
-}
-
-window#waybar {
-    background-color: rgba(30, 30, 46, 0.85); /* Poloprůhledné tmavé pozadí */
-    color: #cdd6f4;
-    border-bottom: 2px solid #89b4fa;
-}
-
-/* Moduly uprostřed a napravo */
-#clock,
-#cpu,
-#memory,
-#mpris,
-#network,
-#pulseaudio,
-#custom-dnd,
-#custom-hud,
-#tray {
-    padding: 0 14px;
-    margin: 5px 4px;
-    border-radius: 8px;
-    background-color: #313244;
-    color: #cdd6f4;
-}
-
-/* Specifické barvy pro jednotlivé komponenty */
-#clock {
-    color: #f38ba8;
-    font-weight: bold;
-}
-
-/* Přehrávač (MPRIS). Modul se sám schová, když nehraje žádný přehrávač.
-   Mauve je jediný fialový tón v paletě — hodiny hned vedle jsou červené
-   a modrá rodina je už obsazená (workspaces, dnd, pulseaudio, okraj panelu). */
-#mpris {
-    color: #cba6f7;
-}
-
-#mpris.paused {
-    color: #6c7086;
-}
-
-#cpu {
-    color: #a6e3a1;
-}
-
-#memory {
-    color: #f9e2af;
-}
-
-#network {
-    color: #b4befe;
-}
-
-#pulseaudio {
-    color: #89dceb;
-}
-
-#pulseaudio.muted {
-    color: #f38ba8;
-}
-
-/* Tlačítko control centeru (quickshell), klik = otevřít/zavřít.
-   Teal je v paletě zbylý volný tón — modrá rodina je obsazená workspaces,
-   dnd a pulseaudiem. Modul nemá stav: panel o svém otevření waybaru nic
-   neříká a zjišťovat to pollingem přes `hypr-hud state` nestojí za to. */
-#custom-hud {
-    color: #94e2d5;
-}
-
-/* Indikátor do-not-disturb (mako), klik = přepnutí */
-#custom-dnd {
-    color: #89b4fa;
-}
-
-#custom-dnd.dnd {
-    color: #f38ba8;
-}
-
-/* Workspaces */
-#workspaces {
-    margin: 5px 8px;
-    background-color: #313244;
-    border-radius: 8px;
-}
-
-#workspaces button {
-    padding: 0 10px;
-    color: #6c7086;
-    background: transparent;
-    transition: all 0.2s ease;
-}
-
-#workspaces button.active {
-    color: #89b4fa;
-}
-
-#workspaces button:hover {
-    background: rgba(137, 180, 250, 0.2);
+    min-height: 0;
     box-shadow: none;
     text-shadow: none;
 }
 
+/* ---- Panel ----------------------------------------------------------
+ *
+ * Řez TL + BR = 14 (vzor "panel" z HudFrame; dlaždice mají TR + BL, takže
+ * proti sobě vzniká skládaný dojem). Výplň je průhledná na 0,88, aby pod
+ * panelem fungoval blur — o ten si říká hl.layer_rule "waybar-blur"
+ * v dot_config/hypr/hyprland.lua.
+ *
+ * Rohové tiky jsou L závorky ramene 12 px odsazené 9 px od rohu — v QML
+ * `max(tickInset, cut * 0.7)` = max(4, 14*0.7) = 9,8. Kreslí se jen na
+ * seříznutých rozích TL a BR, stejně jako v HudFrame.
+ *
+ * Šrafy začínají na x = 24, aby nelezly přes seříznutý roh — protějšek
+ * `leftMargin: Style.chamfer` v HudPanel.qml. Přes celých 2200 px by řvaly,
+ * proto jen levý segment 240 px.
+ */
+window#waybar {
+    border: 1px solid transparent;
+    background-color: transparent;
+    color: @text;
+
+    background-image:
+        linear-gradient(alpha(@accent-hot, 0.55), alpha(@accent-hot, 0.55)),
+        linear-gradient(alpha(@accent-hot, 0.55), alpha(@accent-hot, 0.55)),
+        linear-gradient(alpha(@accent-hot, 0.55), alpha(@accent-hot, 0.55)),
+        linear-gradient(alpha(@accent-hot, 0.55), alpha(@accent-hot, 0.55)),
+        repeating-linear-gradient(45deg,
+            alpha(@warn, 0.45) 0px, alpha(@warn, 0.45) 5px,
+            transparent 5px, transparent 13px),
+        linear-gradient(135deg, transparent 8.975px, alpha(@bg, 0.88) 9.975px),
+        linear-gradient(315deg, transparent 8.975px, alpha(@bg, 0.88) 9.975px),
+        linear-gradient(@line, @line),
+        linear-gradient(@line, @line),
+        linear-gradient(@line, @line),
+        linear-gradient(@line, @line),
+        linear-gradient(135deg, transparent 9.4px, @line 9.9px,
+                                @line 10.9px, transparent 11.4px),
+        linear-gradient(315deg, transparent 9.4px, @line 9.9px,
+                                @line 10.9px, transparent 11.4px);
+
+    background-position:
+        9px 9px,
+        9px 9px,
+        calc(100% - 9px) calc(100% - 9px),
+        calc(100% - 9px) calc(100% - 9px),
+        24px 0,
+        left top, right top,
+        right top, right top, left bottom, left bottom,
+        left top, left top;
+
+    background-size:
+        12px 2px,
+        2px 12px,
+        12px 2px,
+        2px 12px,
+        240px 6px,
+        50% 100%, 50% 100%,
+        calc(100% - 14px) 1px, 1px calc(100% - 14px),
+        calc(100% - 14px) 1px, 1px calc(100% - 14px),
+        100% 100%, 100% 100%;
+
+    background-origin:
+        padding-box, padding-box, padding-box, padding-box, padding-box,
+        padding-box, padding-box,
+        border-box, border-box, border-box, border-box,
+        border-box, border-box;
+
+    background-clip:
+        padding-box, padding-box, padding-box, padding-box, padding-box,
+        padding-box, padding-box,
+        border-box, border-box, border-box, border-box,
+        border-box, border-box;
+
+    background-repeat: no-repeat;
+}
+
+/* ---- Tři ostrůvky ---------------------------------------------------
+ *
+ * Řez TR + BL = 8 (vzor "dlaždice"). Výšku neurčuje min-height, ale
+ * margin: boxy .modules-* se v horizontálním kontejneru roztahují na celou
+ * výšku panelu, takže 6 px shora i zdola dá pás 26 px.
+ *
+ * Vodorovné odsazení 28 px mine zónu rohových tiků panelu.
+ */
+.modules-left,
+.modules-center,
+.modules-right {
+    margin: 6px 0;
+    border: 1px solid transparent;
+    background-color: transparent;
+
+    background-image:
+        linear-gradient(45deg,  transparent 4.733px, @bg-raised 5.733px),
+        linear-gradient(225deg, transparent 4.733px, @bg-raised 5.733px),
+        linear-gradient(@line, @line),
+        linear-gradient(@line, @line),
+        linear-gradient(@line, @line),
+        linear-gradient(@line, @line),
+        linear-gradient(225deg, transparent 5.16px, @line 5.66px,
+                                @line 6.65px, transparent 7.15px),
+        linear-gradient(45deg,  transparent 5.16px, @line 5.66px,
+                                @line 6.65px, transparent 7.15px);
+
+    background-position:
+        left top, right top,
+        left top, right bottom, right bottom, left top,
+        left top, left top;
+
+    background-size:
+        50% 100%, 50% 100%,
+        calc(100% - 8px) 1px, 1px calc(100% - 8px),
+        calc(100% - 8px) 1px, 1px calc(100% - 8px),
+        100% 100%, 100% 100%;
+
+    background-origin:
+        padding-box, padding-box,
+        border-box, border-box, border-box, border-box,
+        border-box, border-box;
+
+    background-clip:
+        padding-box, padding-box,
+        border-box, border-box, border-box, border-box,
+        border-box, border-box;
+
+    background-repeat: no-repeat;
+}
+
+.modules-left  { margin-left: 28px; }
+.modules-right { margin-right: 28px; }
+
+/* mpris má min-length == max-length == 62 právě proto, aby hodiny
+ * neposkakovaly. Ostrůvek tu obranu obchází: když se přehrávač schová,
+ * změní se šířka celého .modules-center a fixed-center střed přepočítá.
+ * Pevné minimum drží ostrůvek i prázdný. */
+.modules-center { min-width: 620px; }
+
+/* ---- Moduly ---------------------------------------------------------
+ *
+ * spacing je v configu 0, rytmus dělá padding tady. Oddělovač je překlad
+ * hairline pravítka z hlavičky HUD dlaždice a dostávají ho všechny moduly
+ * kromě posledního ve skupině — poslední jsou #clock a #pulseaudio, které
+ * se nikdy neschovávají. Prázdný #tray i skrytý #mpris mají nulovou šířku,
+ * takže si oddělovač schovají samy. #language ho nemá, protože je sám
+ * uzavřený do index chipu.
+ */
+#clock,
+#mpris,
+#cpu,
+#memory,
+#network,
+#pulseaudio,
+#custom-hud,
+#custom-dnd,
+#tray {
+    padding: 0 12px;
+    background-color: transparent;
+    color: @text-muted;
+    transition: color 120ms ease, text-shadow 120ms ease, background-image 200ms ease;
+}
+
+#mpris,
+#custom-hud,
+#custom-dnd,
+#tray,
+#cpu,
+#memory,
+#network {
+    background-image: linear-gradient(@line, @line);
+    background-position: right center;
+    background-size: 1px 14px;
+    background-repeat: no-repeat;
+}
+
+/* Hodiny nesou glow místo chromatické aberace — tu GTK3 nedá, jeden widget
+ * je jeden text a filter neexistuje. */
+#clock {
+    font-size: 14px;
+    font-weight: bold;
+    color: @text;
+    text-shadow: 0 0 8px alpha(@accent-hot, 0.35);
+}
+
+#mpris                { color: @media; }
+#mpris.paused         { color: @text-dim; }
+#cpu                  { color: @ok; }
+#memory               { color: @warn; }
+#network              { color: @accent; }
+#network.disconnected { color: @danger; }
+#pulseaudio           { color: @accent-hot; }
+#pulseaudio.muted     { color: @danger; }
+#custom-hud           { color: @accent-hot; }
+#custom-dnd           { color: @text-muted; }
+
+/* DND zapnuté = protějšek "attention" stavu HUD dlaždice: výstražné šrafy
+ * v danger na levé hraně. Oddělovač se musí zopakovat, background-image
+ * není aditivní. */
+#custom-dnd.dnd {
+    color: @danger;
+
+    background-image:
+        repeating-linear-gradient(45deg,
+            alpha(@danger, 0.45) 0px, alpha(@danger, 0.45) 5px,
+            transparent 5px, transparent 13px),
+        linear-gradient(@line, @line);
+
+    background-position: left center, right center;
+    background-size: 8px 16px, 1px 14px;
+    background-repeat: no-repeat;
+}
+
+#custom-hud:hover,
+#custom-dnd:hover,
+#pulseaudio:hover,
+#mpris:hover {
+    color: @accent-hot;
+    text-shadow: 0 0 8px alpha(@accent-hot, 0.55);
+}
+
+/* ---- Index chip: rozložení klávesnice -------------------------------
+ *
+ * Jediný modul, který nese uppercase micro-label ("US"/"CZ"), takže
+ * přebírá roli index chipu [01] z hlavičky HUD dlaždice. Ornamentální
+ * popisky sekcí se nepřidávají — GTK3 nemá `content`, text by musel do
+ * format stringů modulů a na 40px panel se nevejde.
+ *
+ * Řez TR + BL = 3. Výšku 16 px dělá margin, ne min-height: obsah ostrůvku
+ * je 24 px, 5 px shora i zdola dá přesně 16 včetně rámu.
+ *
+ * min-width je povinné. GTK3 počítá požadovanou šířku labelu bez
+ * letter-spacing (to se aplikuje až jako Pango atribut při vykreslení),
+ * takže bez něj dostane widget o ty 3 px míň a "US" se oreže na "U…".
+ */
+#language {
+    margin: 5px 8px;
+    padding: 0 6px;
+    min-width: 20px;
+    border: 1px solid transparent;
+    background-color: transparent;
+
+    font-size: 9px;
+    font-weight: bold;
+    letter-spacing: 1.5px;
+    color: @warn;
+
+    background-image:
+        linear-gradient(45deg,  transparent 1.197px, alpha(@warn, 0.12) 2.197px),
+        linear-gradient(225deg, transparent 1.197px, alpha(@warn, 0.12) 2.197px),
+        linear-gradient(alpha(@warn, 0.45), alpha(@warn, 0.45)),
+        linear-gradient(alpha(@warn, 0.45), alpha(@warn, 0.45)),
+        linear-gradient(alpha(@warn, 0.45), alpha(@warn, 0.45)),
+        linear-gradient(alpha(@warn, 0.45), alpha(@warn, 0.45)),
+        linear-gradient(225deg, transparent 1.62px, alpha(@warn, 0.45) 2.12px,
+                                alpha(@warn, 0.45) 3.11px, transparent 3.61px),
+        linear-gradient(45deg,  transparent 1.62px, alpha(@warn, 0.45) 2.12px,
+                                alpha(@warn, 0.45) 3.11px, transparent 3.61px);
+
+    background-position:
+        left top, right top,
+        left top, right bottom, right bottom, left top,
+        left top, left top;
+
+    background-size:
+        50% 100%, 50% 100%,
+        calc(100% - 3px) 1px, 1px calc(100% - 3px),
+        calc(100% - 3px) 1px, 1px calc(100% - 3px),
+        100% 100%, 100% 100%;
+
+    background-origin:
+        padding-box, padding-box,
+        border-box, border-box, border-box, border-box,
+        border-box, border-box;
+
+    background-clip:
+        padding-box, padding-box,
+        border-box, border-box, border-box, border-box,
+        border-box, border-box;
+
+    background-repeat: no-repeat;
+}
+
+/* ---- Tray ----------------------------------------------------------- */
+
+#tray {
+    padding: 0 10px;
+}
+
+#tray > .passive         { -gtk-icon-effect: dim; }
+#tray > .needs-attention { -gtk-icon-effect: highlight; }
+
+/* ---- Workspaces -----------------------------------------------------
+ *
+ * Aktivní i hover tlačítko má řez TR + BL = 4, stejně jako HudButton.
+ * Glow se nepřenáší: box-shadow v GTK3 respektuje border-radius, ne
+ * gradientový řez, takže by kolem seříznutého tlačítka svítily pravoúhlé
+ * rohy. Stav se místo toho hlásí barvou obrysu a barvou textu.
+ */
+#workspaces {
+    padding: 0 2px;
+    background-color: transparent;
+}
+
+#workspaces button {
+    margin: 3px 2px;
+    padding: 0 8px;
+    min-width: 26px;
+    border: 1px solid transparent;
+    background-color: transparent;
+    color: @text-dim;
+    transition: color 120ms ease, text-shadow 120ms ease, background-image 200ms ease;
+}
+
+#workspaces button.empty {
+    color: @line;
+}
+
+#workspaces button:hover {
+    color: @text;
+
+    background-image:
+        linear-gradient(45deg,  transparent 1.904px, @surface-hi 2.904px),
+        linear-gradient(225deg, transparent 1.904px, @surface-hi 2.904px),
+        linear-gradient(@line, @line),
+        linear-gradient(@line, @line),
+        linear-gradient(@line, @line),
+        linear-gradient(@line, @line),
+        linear-gradient(225deg, transparent 2.33px, @line 2.83px,
+                                @line 3.82px, transparent 4.32px),
+        linear-gradient(45deg,  transparent 2.33px, @line 2.83px,
+                                @line 3.82px, transparent 4.32px);
+
+    background-position:
+        left top, right top,
+        left top, right bottom, right bottom, left top,
+        left top, left top;
+
+    background-size:
+        50% 100%, 50% 100%,
+        calc(100% - 4px) 1px, 1px calc(100% - 4px),
+        calc(100% - 4px) 1px, 1px calc(100% - 4px),
+        100% 100%, 100% 100%;
+
+    background-origin:
+        padding-box, padding-box,
+        border-box, border-box, border-box, border-box,
+        border-box, border-box;
+
+    background-clip:
+        padding-box, padding-box,
+        border-box, border-box, border-box, border-box,
+        border-box, border-box;
+
+    background-repeat: no-repeat;
+}
+
+#workspaces button.active {
+    color: @accent-hot;
+
+    background-image:
+        linear-gradient(45deg,  transparent 1.904px, alpha(@accent, 0.16) 2.904px),
+        linear-gradient(225deg, transparent 1.904px, alpha(@accent, 0.16) 2.904px),
+        linear-gradient(@accent, @accent),
+        linear-gradient(@accent, @accent),
+        linear-gradient(@accent, @accent),
+        linear-gradient(@accent, @accent),
+        linear-gradient(225deg, transparent 2.33px, @accent 2.83px,
+                                @accent 3.82px, transparent 4.32px),
+        linear-gradient(45deg,  transparent 2.33px, @accent 2.83px,
+                                @accent 3.82px, transparent 4.32px);
+
+    background-position:
+        left top, right top,
+        left top, right bottom, right bottom, left top,
+        left top, left top;
+
+    background-size:
+        50% 100%, 50% 100%,
+        calc(100% - 4px) 1px, 1px calc(100% - 4px),
+        calc(100% - 4px) 1px, 1px calc(100% - 4px),
+        100% 100%, 100% 100%;
+
+    background-origin:
+        padding-box, padding-box,
+        border-box, border-box, border-box, border-box,
+        border-box, border-box;
+
+    background-clip:
+        padding-box, padding-box,
+        border-box, border-box, border-box, border-box,
+        border-box, border-box;
+
+    background-repeat: no-repeat;
+}
+
+#workspaces button.urgent {
+    color: @danger;
+    text-shadow: 0 0 6px alpha(@danger, 0.6);
+}
+
+/* ---- Tooltipy ------------------------------------------------------- */
+
+tooltip {
+    background-color: alpha(@bg, 0.96);
+    border: 1px solid @line;
+    color: @text;
+}
+
+tooltip label {
+    padding: 4px 6px;
+    color: @text;
+}

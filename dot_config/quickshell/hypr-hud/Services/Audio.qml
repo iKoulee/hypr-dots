@@ -97,8 +97,9 @@ Singleton {
         return out;
     }
 
-    // Vrátí { icon, label }. Ikona v devices.conf bývá prázdná (glyfy se z něj
-    // někdy ztratily), takže se na ni nespoléhá a volající si doplní svou.
+    // Vrátí { icon, label }. Ikona může být prázdná — devices.conf neumí \u
+    // escapy, takže v něm glyfy musí být literální a už jednou se ztratily
+    // (viz CLAUDE.md, sekce Audio). Volající si na ten případ doplní vlastní.
     function describe(node) {
         if (!node)
             return { icon: "", label: "—" };

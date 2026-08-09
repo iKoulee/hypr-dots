@@ -69,10 +69,9 @@ Singleton {
 
     // ---- Ikony ----------------------------------------------------------
     // Zapsané jako \u escapy schválně. Glyfy z private use area se při editaci
-    // nástrojem, který je nepřenese, tiše promění v prázdný řetězec — přesně
-    // tak zmizely ikony z dot_local/bin/executable_hypr-dnd a z
-    // dot_config/hypr-audio/devices.conf, kde dneska zbyla prázdná pole.
-    // Escapy tenhle problém nemají a jsou i grepnutelné.
+    // nástrojem, který je nepřenese, tiše promění v prázdný řetězec — v tomhle
+    // repu se to už jednou stalo (hypr-dnd, devices.conf, waybar format-muted;
+    // viz CLAUDE.md, sekce Audio). Escapy tenhle problém nemají a jdou grepnout.
     // Ověřeno proti JetBrainsMonoNerdFont-Regular.ttf, že písmo všechny má.
     readonly property string iconVolHigh: "\uF028"   // fa-volume-up
     readonly property string iconVolLow:  "\uF027"   // fa-volume-down

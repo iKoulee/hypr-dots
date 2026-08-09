@@ -43,7 +43,8 @@ HudTile {
             anchors.right: pct.left
             anchors.rightMargin: Style.spacingS
             anchors.verticalCenter: parent.verticalCenter
-            // Ikona z devices.conf bývá prázdná, proto fallback na vlastní.
+            // Ikona z devices.conf může chybět (literální glyf se dá ztratit),
+            // proto fallback na vlastní.
             text: (section.desc.icon.length > 0 ? section.desc.icon
                                                 : Style.iconSpeaker) + "  " + section.desc.label
             color: Audio.muted ? Style.textDim : Style.text

@@ -456,11 +456,10 @@ jede přes NVIDIA EGL z nixGL. Panel se vykresluje.
   podmínku na otevřený panel, jinak by tikala na každý snímek i zavřená.
 - **`IpcHandler` funkce bez anotace typů se tiše nezaregistruje.** Kontrola `just hud-ipc` —
   musí vypsat `toggle`, `open`, `close` i `state`.
-- **Ikony patří do `Commons/Style.qml` jako `\uXXXX` escapy, ne jako znaky.** Glyfy
-  z private use area se při editaci nástrojem, který je nepřenese, tiše promění v prázdný
-  řetězec — a přesně to už se v tomhle repu stalo: `ICON_ON`/`ICON_OFF` v `hypr-dnd`,
-  ikony v `hypr-audio/devices.conf` i `pulseaudio.format-muted` ve waybaru jsou dneska
-  prázdné. Panel proto na chybějící ikonu ze `devices.conf` nespoléhá a doplní vlastní.
+- **Ikony patří do `Commons/Style.qml` jako `\uXXXX` escapy, ne jako znaky** — QML escapy
+  umí, takže tady platí obrana popsaná v sekci Audio (ztracené PUA glyfy). Panel navíc na
+  ikonu z `devices.conf` nespoléhá vůbec a na prázdné pole doplní vlastní; ta ochrana tam
+  zůstává i po obnovení glyfů, protože `devices.conf` escapy neumí a může se to zopakovat.
 - **Shadery nejsou.** `qsb` (`qt6.qtshadertools`) není v runtime closure a
   `Qt5Compat.GraphicalEffects` taky ne, takže žádný `ShaderEffect` s vlastním shaderem.
   `QtQuick.Shapes` (včetně `Shape.CurveRenderer`), `ShaderEffectSource` a `MultiEffect`

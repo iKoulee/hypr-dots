@@ -1,0 +1,25 @@
+[Unit]
+Description=QuickShell control center (hypr-hud)
+Documentation=https://quickshell.org/docs/v0.3.0/
+PartOf=hyprland-session.target
+After=hyprland-session.target
+
+[Service]
+# start-hyprland-nix nastavuje kvůli NVIDII LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu
+# a hyprland.lua ho posílá do systemd přes import-environment. Tam leží systémové
+# libQt6Core.so.6.10.2; nixový quickshell je linkovaný proti Qt 6.11.1 a loader
+# bere LD_LIBRARY_PATH dřív než DT_RUNPATH, takže by si natáhl to systémové
+# a spadl — stejně jako keepassxc. Na hyprpaper tenhle řádek NEPATŘÍ, ten na
+# LD_LIBRARY_PATH naopak stojí (viz CLAUDE.md, Tapeta).
+UnsetEnvironment=LD_LIBRARY_PATH
+# Samotné odstranění ale nestačí: nixové libglvnd pak sice ICD v
+# /usr/share/glvnd/egl_vendor.d najde, ale EGL nenaběhne a Qt skončí na
+# "EGL not available" → "Failed to create RHI" → okno se nevykreslí.
+# nixGL nastaví LD_LIBRARY_PATH na nixové NVIDIA 595.84 knihovny (přesně verze
+# hostitelského driveru) a žádné Qt v nich není. Naměřená tabulka je v CLAUDE.md.
+ExecStart=%h/.nix-profile/bin/nixGL %h/.nix-profile/bin/qs -c hypr-hud
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=hyprland-session.target

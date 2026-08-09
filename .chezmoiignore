@@ -6,3 +6,9 @@ justfile
 # KeeShare klíč a stavové položky (naposledy otevřené databáze). Nastavení,
 # která je po instalaci potřeba nacvakat ručně, jsou popsaná v README.md.
 .config/keepassxc
+
+# .qmlls.ini si quickshell přepisuje sám — generuje do něj aktuální import
+# paths pro qmlls. Kdyby ho spravoval chezmoi, visel by navždycky v `chezmoi
+# diff`. Pro doplňování v editoru si ho vytvoř prázdný ručně:
+#   touch ~/.config/quickshell/hypr-hud/.qmlls.ini
+.config/quickshell/hypr-hud/.qmlls.ini

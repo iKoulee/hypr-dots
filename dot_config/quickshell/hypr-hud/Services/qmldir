@@ -1,0 +1,2 @@
+singleton Audio 1.0 Audio.qml
+singleton Dnd 1.0 Dnd.qml

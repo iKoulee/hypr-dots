@@ -44,6 +44,24 @@ Balíček přináší dvě věci a **obě jsou potřeba**: CLI `playerctl` pro m
 
 Bez démona **waybar modul `mpris` nevidí metadata** — jeho výchozí `"player": "playerctld"` je navzdory dokumentaci doslova D-Bus proxy na tenhle démon, ne „sleduj aktivní přehrávač". D-Bus aktivace z nixu nefunguje, protože session `XDG_DATA_DIRS` neobsahuje `~/.nix-profile/share` (stejná příčina jako u portálu v Známých problémech), proto systemd unit. Ovládání je popsané v sekci Přehrávač (MPRIS) v `CLAUDE.md`.
 
+## Instalace QuickShellu (control center)
+
+```bash
+nix profile install nixpkgs#quickshell
+```
+
+Přináší binárky `qs` a `quickshell`. `nixGL` už v profilu je a je potřeba — bez něj se panel nevykreslí.
+
+Control center se vyvolá `Super+C` nebo `just hud`. Panel běží jako `hypr-hud.service` a je schovaný, dokud ho nevyvoláš.
+
+Po prvním nasazení si pro doplňování v editoru vytvoř prázdný soubor, který si pak quickshell přepisuje sám (je v `.chezmoiignore`, aby nevisel v `chezmoi diff`):
+
+```bash
+touch ~/.config/quickshell/hypr-hud/.qmlls.ini
+```
+
+Bez `nixGL` panel **tiše nenaběhne** — quickshell se spustí, načte config a pak skončí na `EGL not available` → `Failed to create RHI`, takže se okno nevykreslí a v `journalctl --user -u hypr-hud` je jen varování. Podrobnosti a naměřená tabulka jsou v sekci Control center v `CLAUDE.md`.
+
 ## Instalace KeePassXC a polkit agenta
 
 ```bash
@@ -203,6 +221,11 @@ just screenshots        # otevřít adresář se screenshoty
 just players            # co waybar modul "mpris" právě vidí
 just player-raise       # vyvolat okno aktivního přehrávače
 just restart-playerctld # restart MPRIS proxy démona
+just hud                # otevřít/zavřít control center (test bez zkratky)
+just hud-close          # zavřít control center (záchranná brzda)
+just restart-hud        # restart control centeru po změně QML
+just hud-debug          # control center na popředí s logy
+just hud-ipc            # vypsat registrované IPC cíle a funkce
 just bootstrap          # apply + enable-services + enable-keyring-integration
 just --list             # přehled všech příkazů
 ```
@@ -231,5 +254,9 @@ Chezmoi source dir (symlink na `~/repos/GitHub/iKoulee/hypr-dots`, viz výše) j
 ## Známé problémy
 
 - **Screenshot přes portál (prohlížeč, „sdílet obrazovku") nefunguje.** `xdg-desktop-portal-hyprland` je nainstalovaný, ale nikdy nenaběhne — systemd user `XDG_DATA_DIRS` neobsahuje `~/.nix-profile/share`, takže systémový portál jeho `hyprland.portal` nenajde a jede jen `-gtk`, který na wlroots interaktivní screenshot neumí. Klávesa `Print` a `hypr-screenshot` portál obcházejí (grim mluví se screencopy protokolem přímo), takže fungují.
+
+- **Control center nemá dlaždice Wi-Fi, Bluetooth ani baterie.** Stroj je nemá — desktop s ethernetem a `wg0`, žádný Wi-Fi ani Bluetooth řadič (`rfkill list` je prázdný), žádná baterie. Night Light a Caffeine jsou vědomě odložené na další iteraci.
+
+- **Nixové Qt aplikace potřebují zvláštní zacházení s `LD_LIBRARY_PATH`.** Týká se to KeePassXC, hyprpolkitagentu a QuickShellu; u QuickShellu navíc nestačí proměnnou odstranit, musí projít přes `nixGL`. Naměřená tabulka je v sekci Control center v `CLAUDE.md`. Projevuje se to tiše — buď hláškou o verzi Qt, nebo tím, že se okno prostě nevykreslí.
 
 - **hyprpaper nenačte tapetu z `hyprpaper.conf` automaticky.** Po startu `hyprpaper.service` se v logu objeví `Monitor DP-2 has no target: no wp will be created`, i když `preload`/`wallpaper` řádky v configu jsou správně (ověřeno i s absolutní cestou bez `~`). Zatím nevyřešeno — jde o samostatný, od tohoto deploymentu nezávislý bug (viz `journalctl --user -u hyprpaper.service`). Dočasný obchvat: po startu ručně `hyprctl hyprpaper wallpaper "DP-2,<cesta k obrázku>"`.

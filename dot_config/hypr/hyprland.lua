@@ -337,7 +337,15 @@ hl.bind(mainMod .. " + P", hl.dsp.window.pseudo())
 hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))    -- dwindle only
 
 -- Přepínač audio výstupů (wofi). Skript umí i "input" pro mikrofony, zatím bez bindu.
+-- Zůstává i po zavedení control centeru: funguje, i když quickshell neběží,
+-- a je to jediná cesta k přepnutí mikrofonu.
 hl.bind(mainMod .. " + SHIFT + A", hl.dsp.exec_cmd(os.getenv("HOME") .. "/.local/bin/hypr-audio-menu output"))
+
+-- Control center (QuickShell HUD): hlasitost, přehrávač, DND, hodiny.
+-- Přes ~/.local/bin, ne nixBin — skript odstraní LD_LIBRARY_PATH a spustí qs
+-- přes nixGL (nixové Qt 6.11.1 vs. systémové 6.10.2 a chybějící EGL, viz
+-- CLAUDE.md, sekce Control center), a zároveň obaluje `qs ipc call`.
+hl.bind(mainMod .. " + C", hl.dsp.exec_cmd(os.getenv("HOME") .. "/.local/bin/hypr-hud toggle"))
 
 -- KeePassXC. Běží jako systemd service schovaná v trayi, tohle jen vyvolá okno
 -- (keepassxc je single-instance, druhé spuštění existující okno jen zvedne).
@@ -508,6 +516,26 @@ hl.window_rule({
 --     no_anim = true,
 -- })
 -- overlayLayerRule:set_enabled(false)
+
+-- Control center (QuickShell). Namespace nastavuje WlrLayershell.namespace
+-- v Modules/HudPanel.qml a po připojení okna se už nedá změnit — ověřeno
+-- `hyprctl layers` (level 3, x=3080 y=48 w=560).
+--
+-- Blur je globálně zapnutý v decoration.blur, ale žádná vrstva si o něj
+-- zatím neřekla; tohle je první. ignore_alpha přeskočí blur na skoro
+-- průhledných pixelech, aby se nerozmazávalo okolí seříznutých rohů —
+-- výplň panelu má alfu 0.88 (Style.panelAlpha), práh 0.6 je pod ní.
+--
+-- Animace se nenastavuje schválně: globální layersIn/layersOut výš
+-- (easeOutQuint + fade) sedí a panel si k tomu přidává vlastní sken.
+hl.layer_rule({
+    name  = "hud-blur",
+    match = { namespace = "^hypr-hud$" },
+
+    blur         = true,
+    blur_popups  = true,
+    ignore_alpha = 0.6,
+})
 
 -- Hyprland-run windowrule
 hl.window_rule({

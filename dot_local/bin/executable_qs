@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+#
+# Shim před nixovou binárkou QuickShellu.
+#
+# Stejný důvod jako u ~/.local/bin/keepassxc, jen o patro složitější: nestačí
+# LD_LIBRARY_PATH odstranit (jinak si nixový qs natáhne systémové Qt 6.10.2
+# místo svého 6.11.1), ale je potřeba ho nahradit nixGL — bez něj Qt nenajde
+# EGL a okno se nevykreslí. Naměřená tabulka je v CLAUDE.md, sekce Control center.
+#
+# ~/.local/bin je v PATH před ~/.nix-profile/bin, takže tenhle soubor chytí
+# i holé `qs` napsané v terminálu. Pro control center se používá `hypr-hud`,
+# tenhle shim je pro ruční pokusy a jiné quickshell configy.
+
+unset LD_LIBRARY_PATH
+exec "$HOME/.nix-profile/bin/nixGL" "$HOME/.nix-profile/bin/qs" "$@"

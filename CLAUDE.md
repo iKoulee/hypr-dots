@@ -53,7 +53,7 @@ se konfiguruje ručně v GUI — kroky jsou v `README.md`.
 
 ### Autostart: systemd user services (preferovaná metoda)
 
-Waybar, hyprpaper, mako, keepassxc, hyprpolkitagent a playerctld jsou spravovány jako **systemd user services**, ne spouštěny přímo z Hyprland configu. Řeší to problém s `PATH` při startu z display manageru a umožňuje `systemctl --user restart waybar` bez zásahu do Hyprlandu.
+Waybar, hyprpaper, mako, keepassxc, hyprpolkitagent, playerctld a hypr-hud jsou spravovány jako **systemd user services**, ne spouštěny přímo z Hyprland configu. Řeší to problém s `PATH` při startu z display manageru a umožňuje `systemctl --user restart waybar` bez zásahu do Hyprlandu.
 
 Startup sekvence v `hl.on("hyprland.start")`:
 1. `dbus-update-activation-environment` — exportuje `WAYLAND_DISPLAY`, `XDG_CURRENT_DESKTOP`, `HYPRLAND_INSTANCE_SIGNATURE` do D-Bus (nutné pro XDG portaly a tray)
@@ -62,13 +62,14 @@ Startup sekvence v `hl.on("hyprland.start")`:
 
 Unit soubory v `dot_config/systemd/user/`:
 
-- `hyprland-session.target` — seskupuje session services (`Wants=` waybar, hyprpaper, mako, keepassxc, hyprpolkitagent, playerctld)
-- `waybar.service` / `hyprpaper.service` / `mako.service` / `keepassxc.service` / `hyprpolkitagent.service` / `playerctld.service` — `PartOf=hyprland-session.target`, `Restart=on-failure`
+- `hyprland-session.target` — seskupuje session services (`Wants=` waybar, hyprpaper, mako, keepassxc, hyprpolkitagent, playerctld, hypr-hud)
+- `waybar.service` / `hyprpaper.service` / `mako.service` / `keepassxc.service` / `hyprpolkitagent.service` / `playerctld.service` / `hypr-hud.service` — `PartOf=hyprland-session.target`, `Restart=on-failure`
 
 Nová service pro autostart: vytvoř `.service` s `WantedBy=hyprland-session.target`, přidej ji
 do `Wants=` v targetu **a do seznamů v `enable-services`/`disable-services` v `justfile`** —
 jsou tři ručně udržované seznamy a musí sedět všechny. Pokud jde o nixovou GUI aplikaci,
-patří do ní i `UnsetEnvironment=LD_LIBRARY_PATH` (viz sekce Keyring a hesla).
+patří do ní i `UnsetEnvironment=LD_LIBRARY_PATH` (viz sekce Keyring a hesla) — a u Qt6/QML
+aplikace ještě spuštění přes `nixGL` (viz sekce Control center).
 
 ### Hyprland config: Lua API
 
@@ -246,7 +247,9 @@ python3 -c "from fontTools.ttLib import TTFont; print(0xf0f3 in TTFont('$HOME/.l
 
 ### App launcher
 
-`Super+D` → `wofi --show drun` (konfigurováno v `dot_config/wofi/`). `Super+R` → `hyprlauncher` (musí být nainstalován zvlášť).
+`Super+R` → `wofi --show drun` (konfigurováno v `dot_config/wofi/`). Volání jde přes `nixBin`,
+protože wofi je jen v Nix profilu. `hyprlauncher` je v profilu taky, ale binding na něj je
+v `hyprland.lua` zakomentovaný.
 
 ### Audio
 
@@ -376,6 +379,150 @@ Keybindy v `hyprland.lua` (`makoctl` volaný absolutní cestou přes `nixBin`, s
 
 `just restart-mako` po změně configu, `just test-notify` pro vizuální kontrolu všech tří úrovní priority.
 
+### Control center (QuickShell)
+
+Popup panel s hlasitostí, přehrávačem, DND přepínačem a hodinami. `Super+C` nebo `just hud`.
+Stack je **quickshell 0.3.0** (`nix profile install nixpkgs#quickshell`) — QML/Qt6 shell
+framework, ne hotová aplikace; celý panel je QML v tomhle repu.
+
+Jméno `hypr-hud` se propisuje na **pět míst zároveň** a musí sedět všude:
+
+| kde | co |
+|-----|-----|
+| `dot_config/quickshell/hypr-hud/` | adresář configu (chezmoi → `~/.config/quickshell/hypr-hud/`) |
+| `qs -c hypr-hud` | výběr configu na příkazové řádce |
+| `WlrLayershell.namespace` v `Modules/HudPanel.qml` | jméno vrstvy pro `hyprctl layers` |
+| `dot_config/systemd/user/hypr-hud.service` | autostart |
+| `dot_local/bin/executable_hypr-hud` | vstupní brána (keybind, justfile, ruka) |
+
+Vstupní bod je `shell.qml`, importy uvnitř configu jdou přes `import qs.Commons` /
+`qs.Services` / `qs.Widgets` / `qs.Modules`. **Nikdy `import "root:/…"`** — rozbíjí to
+qmlls i singletony. `qmldir` je nutný jen pro singletony (`Commons/`, `Services/`);
+u `Widgets/` a `Modules/` by neúplný qmldir naopak typy schoval, protože bez něj se
+kapitalizované `.qml` exportují samy.
+
+#### `LD_LIBRARY_PATH`, nixové Qt a NVIDIA — naměřeno
+
+Tohle je **třetí** případ té samé pasti v repu (po keepassxc a hyprpolkitagentu) a jediný,
+kde nestačí proměnnou odstranit. Systémové Qt6 je 6.10.2, nixový quickshell chce 6.11.1,
+a loader bere `LD_LIBRARY_PATH` dřív než `DT_RUNPATH` nixové binárky:
+
+| env | `qs --version` | okno |
+|-----|----------------|------|
+| session (`/usr/lib/x86_64-linux-gnu:…`) | `libQt6Core.so.6: version 'Qt_6.11' not found` | — |
+| bez `LD_LIBRARY_PATH` | OK | **ne** — `qt.qpa.wayland: EGL not available` → `Failed to create RHI` |
+| bez + `__EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/10_nvidia.json` | OK | **ne** — EGL pořád nedostupné |
+| `LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/gbm` (žádné Qt) | OK | **ne** — EGL pořád nedostupné |
+| **bez + `nixGL`** | **OK** | **OK** |
+
+`nixGL` je už v profilu a je to přesně nvidia-x11 **595.84**, tedy verze hostitelského
+driveru. Nastaví `__EGL_VENDOR_LIBRARY_FILENAMES` na nixový ICD a `LD_LIBRARY_PATH` na
+nixové NVIDIA/libglvnd knihovny — žádné Qt v nich není, takže se Qt vrátí k `DT_RUNPATH`.
+**`unset LD_LIBRARY_PATH` musí být před nixGL**, protože nixGL k proměnné existující
+hodnotu připojuje; jinak by se systémové Qt vrátilo zadními vrátky.
+
+Proto `hypr-hud.service` má `UnsetEnvironment=LD_LIBRARY_PATH` **i** `ExecStart` přes nixGL,
+a `dot_local/bin/executable_qs` je shim ve stejném duchu jako `executable_keepassxc`.
+Na hyprpaper `UnsetEnvironment` pořád **nepatří** (viz sekce Tapeta) — rozhoduje se to per-service.
+
+V logu služby zůstávají dvě `MESA-LOADER: failed to open …/run/opengl-driver/lib/gbm/…`
+varování. Jsou neškodná — je to nixová mesa hledající NixOS-only cestu, zatímco render
+jede přes NVIDIA EGL z nixGL. Panel se vykresluje.
+
+#### Pasti
+
+- **`NotificationServer` se v tomhle configu nesmí nikdy instancovat.** Quickshell je
+  plnohodnotný notifikační démon: registraci `org.freedesktop.Notifications` sice teď mako
+  vyhraje, ale quickshell to jméno **sleduje** a při `just restart-mako` by se ho tiše
+  zmocnil a notifikace by přestaly chodit. DND proto jede přes skript, ne přes vlastní server.
+  Kontrola:
+  ```bash
+  busctl --user list | grep org.freedesktop.Notifications   # musí být .mako-wrapped
+  ```
+  Ověřeno i po `systemctl --user restart mako.service` — jméno zůstalo mako.
+- **`PwObjectTracker` je povinný.** Bez něj jsou u `PwNode` neplatné `volume`, `muted`
+  i `properties` — hlasitost by byla pořád 0 a přezdívky by tiše spadly na fallback,
+  protože `node.name` nejde přečíst. Trackují se **všechny** sinky, ne jen výchozí:
+  čipy potřebují `node.name` i u neaktivních zařízení.
+- **DND jen přes `~/.local/bin/hypr-dnd`, nikdy přímo `makoctl`.** Skript navíc posílá
+  `pkill -RTMIN+8 waybar`; obejít ho znamená rozejít indikátor v panelu.
+  Opačný směr (waybar/keybind → HUD) se musí **pollovat** — mako o změně režimu nic
+  nevysílá a quickshell 0.3.0 nemá generické D-Bus API. Polling běží jen s otevřeným panelem.
+- **`devices.conf` má teď dva konzumenty** — bashový glob v `hypr-audio-menu` a
+  glob→`RegExp` v `Services/Audio.qml`. Změna formátu se dotkne obou.
+- **`playerctld` běží**, takže `Mpris.players` vrací Firefox **dvakrát** (jednou přes proxy
+  `org.mpris.MediaPlayer2.playerctld`). Filtruje se podle `dbusName`.
+- **`MprisPlayer.position` není reaktivní** — musí ho šťouchat `FrameAnimation`. Ta má
+  podmínku na otevřený panel, jinak by tikala na každý snímek i zavřená.
+- **`IpcHandler` funkce bez anotace typů se tiše nezaregistruje.** Kontrola `just hud-ipc` —
+  musí vypsat `toggle`, `open`, `close` i `state`.
+- **Ikony patří do `Commons/Style.qml` jako `\uXXXX` escapy, ne jako znaky.** Glyfy
+  z private use area se při editaci nástrojem, který je nepřenese, tiše promění v prázdný
+  řetězec — a přesně to už se v tomhle repu stalo: `ICON_ON`/`ICON_OFF` v `hypr-dnd`,
+  ikony v `hypr-audio/devices.conf` i `pulseaudio.format-muted` ve waybaru jsou dneska
+  prázdné. Panel proto na chybějící ikonu ze `devices.conf` nespoléhá a doplní vlastní.
+- **Shadery nejsou.** `qsb` (`qt6.qtshadertools`) není v runtime closure a
+  `Qt5Compat.GraphicalEffects` taky ne, takže žádný `ShaderEffect` s vlastním shaderem.
+  `QtQuick.Shapes` (včetně `Shape.CurveRenderer`), `ShaderEffectSource` a `MultiEffect`
+  fungují — ověřeno probe oknem. Glow je proto tři tahy `ShapePath` pod sebou a chromatická
+  aberace tři `Text` přes sebe.
+- **QTBUG-137166:** `Rectangle` s `color: "transparent"`, u kterého se sáhne na `border`,
+  zneviditelní všechno pod sebou. Rámečky proto kreslí `Shape`; kde je `Rectangle` nutný,
+  má neprůhlednou barvu nebo explicitní `border.width: 0`.
+- **`Commons/Style.qml` potřebuje `import QtQuick`**, jinak načtení skončí na
+  `color is not a type` — základní typ `color` a `Qt.rgba` přicházejí odtamtud, ne
+  z `Quickshell`.
+- **Binding loop u výběru přehrávače.** Původní „připnutí" (`pinned` odvozené z `player`
+  a zároveň do něj vstupující) Qt zahlásilo jako smyčku. Teď je `player` čistě odvozená
+  hodnota.
+
+#### Umístění a vztah k mako
+
+Naměřeno `hyprctl layers`: waybar `0 0 5120 40`, mako `2342 80 436 100` (top-center),
+panel `3080 48 560 540` na overlay vrstvě. Panel je proto posunutý **800 px vpravo od
+středu** (`Style.hudOffsetX`) — centrovaný by notifikace překryl, protože overlay je nad
+mako vrstvou `top`. Zrcadlení doleva je změna jedné hodnoty na `-800`.
+
+Odsazení pod waybarem **není napsané natvrdo**: `exclusionMode: ExclusionMode.Normal`
+s `exclusiveZone: 0` respektuje cizí exkluzivní zóny, takže stačí `margins.top: 8`
+a vyjde `y = 48`. Kdyby `hyprctl layers` ukázal `y = 8`, přepni na `ExclusionMode.Ignore`
+a `margins.top: 48` — a přidej to k místům, kde je výška waybaru natvrdo (`waybar/config`,
+`mako` `outer-margin`).
+
+Blur zařizuje `hl.layer_rule({ name = "hud-blur", match = { namespace = "^hypr-hud$" }, … })`
+v `hyprland.lua` — je to **první vrstva v repu, která si o globální blur řekne**.
+`ignore_alpha = 0.6` je pod alfou výplně panelu (0.88), takže se nerozmazává okolí
+seříznutých rohů.
+
+#### Vzhled
+
+Cyberpunk 2077 formální jazyk, paleta **Tokyo Night** (stejná jako mako a satty, ne
+Catppuccin z waybaru). Signaturní žlutá `#fcee0a` se **nepoužívá** — její roli si dělí
+`warn = #e0af68` (šrafy, indexy sekcí) a `accentHot = #7dcfff` (glow, rohové tiky).
+Rohy jsou seříznuté pod 45°, ne zaoblené; panel má řez TL+BR, dlaždice TR+BL.
+Popisky jsou anglicky, datum česky přes locale.
+
+#### Kontrola po změně
+
+```bash
+just restart-hud
+journalctl --user -u hypr-hud -n 30 --no-pager   # QML chyby chodí sem
+just hud-ipc                                     # registrované IPC funkce
+just hud-debug                                   # popředí s logy (zastaví službu)
+hyprctl layers -j | jq -r '.[].levels | to_entries[] | .value[]
+    | select(.namespace=="hypr-hud") | "\(.x) \(.y) \(.w) \(.h)"'
+```
+
+#### Další iterace
+
+Wi-Fi, Bluetooth ani baterie tu nejsou, protože je stroj nemá (`rfkill list` prázdný,
+UPower zná jen `DisplayDevice`). Pro budoucí dlaždici „Performance" je správný backend
+**`power-profiles-daemon`** (běží, `CpuDriver: amd_pstate`) přes
+`org.freedesktop.UPower.PowerProfiles`, **ne** sahání na cpufreq governory — s
+`amd-pstate-epp` jsou stejně jen dva (`performance`, `powersave`) a skutečný knob je EPP.
+Protože quickshell 0.3.0 nemá generické D-Bus API, půjde to přes `Process` +
+`powerprofilesctl`.
+
 ### Screenshoty
 
 Stack je **grim** (snímek) + **slurp** (výběr myší) + **satty** (anotace) + `wl-copy`,
@@ -497,7 +644,9 @@ systemd — terminály, keybindy i D-Bus aktivované procesy. Řeší se to na d
   i `Exec=` v D-Bus service souboru — proto **ne** přes `nixBin`, na rozdíl od wofi
   a makoctl.
 
-**Každá další nixová Qt/GTK aplikace bude potřebovat obojí.**
+**Každá další nixová Qt/GTK aplikace bude potřebovat obojí.** A u Qt6 aplikace, která
+sama kreslí okno, to nestačí — po odstranění proměnné Qt nenajde EGL a okno se nevykreslí.
+Tam je potřeba ještě `nixGL`; naměřená tabulka je v sekci Control center.
 
 Druhá past: `hyprpolkitagent` se instaluje do `libexec/`, ne do `bin/`, takže
 v `~/.nix-profile/bin/` není — `ExecStart` míří na `%h/.nix-profile/libexec/hyprpolkitagent`.

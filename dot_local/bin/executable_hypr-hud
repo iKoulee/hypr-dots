@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+#
+# Ovládání control centeru (QuickShell HUD).
+#
+# Použití: hypr-hud [toggle|open|close|state|show|run]
+#
+# Dělá dvě věci najednou:
+#
+#  1) Obchází past LD_LIBRARY_PATH + nixové Qt + NVIDIA. start-hyprland-nix
+#     exportuje LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu, kde leží systémové
+#     libQt6Core.so.6.10.2; nixový quickshell chce 6.11.1 a loader bere
+#     LD_LIBRARY_PATH dřív než DT_RUNPATH, takže by spadl na
+#       version `Qt_6.11' not found
+#     (stejná past jako u keepassxc). Jenže samotné `unset` nestačí — nixové
+#     libglvnd pak sice najde ICD v /usr/share/glvnd/egl_vendor.d, ale EGL
+#     stejně nenaběhne a Qt skončí na "EGL not available" → "Failed to create
+#     RHI" → okno se vůbec nevykreslí. Proto nixGL, který nastaví LD_LIBRARY_PATH
+#     na nixové NVIDIA 595.84 knihovny (= verze hostitelského driveru) a žádné
+#     Qt v něm není. Naměřená tabulka všech variant je v CLAUDE.md.
+#
+#     nixGL k LD_LIBRARY_PATH připojuje tu stávající, takže `unset` musí být
+#     před ním — jinak by se systémové Qt vrátilo zadními vrátky.
+#
+#  2) Obaluje `qs ipc call`, ať keybind, justfile i ruka v terminálu volají
+#     jednu a tu samou věc.
+set -euo pipefail
+
+unset LD_LIBRARY_PATH
+export PATH="$HOME/.nix-profile/bin:$PATH"
+
+readonly CONFIG="hypr-hud"
+readonly TARGET="hud"
+readonly NIXGL="$HOME/.nix-profile/bin/nixGL"
+readonly QS="$HOME/.nix-profile/bin/qs"
+
+usage() {
+    echo "Použití: $(basename "$0") [toggle|open|close|state|show|run]" >&2
+}
+
+case "${1:-toggle}" in
+    toggle|open|close|state)
+        exec "$NIXGL" "$QS" -c "$CONFIG" ipc call "$TARGET" "$1"
+        ;;
+    # Výpis registrovaných IPC cílů a jejich funkcí. Funkce bez anotace
+    # návratového typu se tiše nezaregistruje, tohle je jediná kontrola.
+    show)
+        exec "$NIXGL" "$QS" -c "$CONFIG" ipc show
+        ;;
+    # Ladění: běh na popředí s logy. Nejdřív `systemctl --user stop hypr-hud`,
+    # dvě instance stejného configu by si IPC cíl přebíjely.
+    run)
+        exec "$NIXGL" "$QS" -c "$CONFIG"
+        ;;
+    *)
+        usage
+        exit 2
+        ;;
+esac

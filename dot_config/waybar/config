@@ -78,8 +78,9 @@
     "hyprland/workspaces": {
         "format": "{icon}",
         "format-icons": {
-            "active": "\uf192",
-            "default": "\uf111"
+            "4": "\uf07e",
+            "5": "\uf00b",
+            "default": "\uf0db"
         },
         "persistent-workspaces": {
             "*": 5

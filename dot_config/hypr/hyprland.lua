@@ -235,6 +235,20 @@ hl.animation({ leaf = "workspacesIn",  enabled = true,  speed = 1.21, bezier = "
 hl.animation({ leaf = "workspacesOut", enabled = true,  speed = 1.94, bezier = "almostLinear", style = "fade" })
 hl.animation({ leaf = "zoomFactor",    enabled = true,  speed = 7,    bezier = "quick" })
 
+-- Layout per workspace. Přepnout layout za běhu nejde — `hl.layout` má jediný
+-- člen (`register`) a `hyprctl keyword` i `hyprctl layouts` s Lua configem vrací
+-- `unknown request`, viz CLAUDE.md. Tohle je jediná podepřená cesta k víc než
+-- jednomu layoutu: HL.WorkspaceRuleSpec má pole `layout` a `layout_opts`.
+--
+-- general.layout výš zůstává default (lua:thirds), tady jsou jen odchylky —
+-- workspace 1–3 a 6–10 tedy jedou po třetinách. Ladit by šlo přes `layout_opts`
+-- (klíče bez prefixu: `column_width`, ne `scrolling:column_width`).
+--
+-- POZOR: mapování se propisuje i do panelu. Při změně sáhni zároveň na
+-- `format-icons` v `dot_config/waybar/config`, modul `hyprland/workspaces`.
+hl.workspace_rule({ workspace = "4", layout = "scrolling" })
+hl.workspace_rule({ workspace = "5", layout = "master" })
+
 -- Ref https://wiki.hypr.land/Configuring/Basics/Workspace-Rules/
 -- "Smart gaps" / "No gaps when only"
 -- uncomment all if you wish to use that.
@@ -442,6 +456,43 @@ hl.bind(mainMod .. " + right", hl.dsp.focus({ direction = "right" }))
 hl.bind(mainMod .. " + up",    hl.dsp.focus({ direction = "up" }))
 hl.bind(mainMod .. " + down",  hl.dsp.focus({ direction = "down" }))
 
+-- Správa oken z klávesnice. Argumenty dispatcherů nejsou ve stubu (všechny jsou
+-- tam jen `fun(...): HL.Dispatcher`) — vytáhly se z validačních hlášek v binárce,
+-- viz CLAUDE.md, sekce Hyprland config. Pro referenci:
+--   hl.window.move    → direction, x+y(+relative), workspace, into_group, out_of_group
+--   hl.window.swap    → direction, target/with/other, next, prev
+--   hl.window.resize  → { x, y, relative?, window? } nebo { keep_aspect_ratio }
+-- `direction` je vždy left/right/up/down.
+--
+-- Pod lua:thirds to funguje bez zásahu do layoutu: CLuaTiledAlgorithm má
+-- moveTargetInDirection, swapTargets i resizeTarget, takže provider nemusí
+-- implementovat layout_msg.
+
+-- Přesun okna v layoutu — protějšek focus bindů výš.
+hl.bind(mainMod .. " + SHIFT + left",  hl.dsp.window.move({ direction = "left" }))
+hl.bind(mainMod .. " + SHIFT + right", hl.dsp.window.move({ direction = "right" }))
+hl.bind(mainMod .. " + SHIFT + up",    hl.dsp.window.move({ direction = "up" }))
+hl.bind(mainMod .. " + SHIFT + down",  hl.dsp.window.move({ direction = "down" }))
+
+-- Prohození s dalším/předchozím oknem, bez ohledu na směr.
+hl.bind(mainMod .. " + Tab",         hl.dsp.window.swap({ next = true }))
+hl.bind(mainMod .. " + SHIFT + Tab", hl.dsp.window.swap({ prev = true }))
+
+-- Změna velikosti. `relative = true` znamená delta v pixelech, ne cílový rozměr.
+-- repeating = držení klávesy krok opakuje.
+hl.bind(mainMod .. " + CTRL + left",  hl.dsp.window.resize({ x = -40, y =   0, relative = true }), { repeating = true })
+hl.bind(mainMod .. " + CTRL + right", hl.dsp.window.resize({ x =  40, y =   0, relative = true }), { repeating = true })
+hl.bind(mainMod .. " + CTRL + up",    hl.dsp.window.resize({ x =   0, y = -40, relative = true }), { repeating = true })
+hl.bind(mainMod .. " + CTRL + down",  hl.dsp.window.resize({ x =   0, y =  40, relative = true }), { repeating = true })
+
+-- Fullscreen přes celý monitor vs. maximize, který respektuje gapy a rezervovanou
+-- zónu waybaru.
+hl.bind(mainMod .. " + F",         hl.dsp.window.fullscreen({ action = "toggle", mode = "fullscreen" }))
+hl.bind(mainMod .. " + SHIFT + F", hl.dsp.window.fullscreen({ action = "toggle", mode = "maximized" }))
+
+-- Plovoucí okna: připnutí přes všechny workspace a vycentrování.
+hl.bind(mainMod .. " + SHIFT + P", hl.dsp.window.pin())
+hl.bind(mainMod .. " + SHIFT + C", hl.dsp.window.center())
 
 -- Switch workspaces with mainMod + [0-9]
 -- Move active window to a workspace with mainMod + SHIFT + [0-9]

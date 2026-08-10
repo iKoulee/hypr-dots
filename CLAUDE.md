@@ -97,6 +97,27 @@ nainstalovanou verzi, zatímco wiki je pro 0.56 místy pozadu a neúplná.
 grep -n "HL.WorkspaceRuleSpec\|HL.WindowRuleSpec\|HL.ConfigOpt" ~/.nix-profile/share/hypr/stubs/hl.meta.lua
 ```
 
+**Na dispatchery ale stub nestačí.** Je autogenerovaný (`scripts/generateLuaStubs.py`)
+a všech ~40 funkcí pod `hl.dsp.*` má jedinou deklaraci `fun(...): HL.Dispatcher` — žádné
+parametry, žádný doc komentář. Které klíče tabulka přijímá, je jen ve **validačních
+hláškách zakompilovaných v binárce**:
+
+```bash
+strings -n 3 ~/.nix-profile/bin/.Hyprland-wrapped | grep -E "^hl\.[a-z]+\.|Expected one of"
+```
+
+Naměřený výtah (`direction` je všude `left/right/up/down`):
+
+| dispatcher | přijímané klíče |
+|---|---|
+| `hl.window.move` | `direction`, `x`+`y`(+`relative`), `workspace`, `into_group`, `out_of_group` |
+| `hl.window.swap` | `direction`, `target`/`with`/`other`, `next`, `prev` |
+| `hl.window.resize` | nic, `{ x, y, relative?, window? }`, nebo `{ keep_aspect_ratio }` |
+| `hl.window.fullscreen` | `action` = `toggle/set/unset`, `mode` = `fullscreen/maximized` |
+| `hl.focus` | `direction`, `monitor`, `window`, `urgent_or_last`, `last` |
+
+Pozor, `hl.window.move` **nemá pole `monitor`** — přesun okna na jiný výstup přes něj nejde.
+
 Doplňkově `hyprctl descriptions` — vypíše všechny config options s defaulty, rozsahy
 a popisem (stub dává tvar API, `descriptions` konkrétní klíče a hodnoty):
 
@@ -125,14 +146,56 @@ skončí na parse error). Dispatchery jako `hl.dsp.window.close()` nebo `hl.dsp.
 působí na **aktivní okno** a nemají cílový argument, takže při živém fokusu klidně trefí něco
 jiného, než čekáš. Tvary argumentů se dají bezpečně zjistit chybovou hláškou — `hl.dsp.focus({ __probe = 1 })`
 vypíše `Expected one of: direction, monitor, window, …` a nic neprovede. `hl.dsp.window.close()`
-takhle **bezpečné není**, neznámé argumenty ignoruje a okno zavře.
+takhle **bezpečné není**, neznámé argumenty ignoruje a okno zavře. Validace se dělá až při
+vykonání, ne při konstrukci — `hyprctl repl 'return hl.dsp.window.close({ __probe = 1 })'`
+vrátí `HL.Dispatcher` a nezjistíš nic. Bezpečnější než probe je tabulka klíčů vyčtená
+ze `strings` v sekci výš.
 
 **Layout není globálně exkluzivní.** `general.layout` je jen default; `hl.workspace_rule`
 má pole `layout` a `layout_opts` (viz `HL.WorkspaceRuleSpec` ve stubu), takže jde mít
 jiný layout per workspace. Klíče v `layout_opts` jsou bez prefixu (`column_width`, ne
-`scrolling:column_width`). Za běhu se globální layout přepnout nedá — `hyprctl keyword`
-s Lua configem zmizel (vrací `unknown request`), takže změna = editace `hyprland.lua`
-a `just reload`.
+`scrolling:column_width`). Používá se to — workspace 4 je `scrolling`, 5 `master`, zbytek
+dědí `lua:thirds`; pravidla jsou v `hyprland.lua` u ostatních workspace rules. Ověřeno
+geometrií (`scrolling` dá na třech oknech ~2530 px sloupce a jeden zastrčí na zápornou X,
+`master` 2785 + dva stacky 2277×667). `hyprctl workspacerules` pravidla vypíše, ale pole
+`layout` **netiskne** — kontroluje se jen geometrií.
+
+Dostupná jména: `dwindle`, `master`, `monocle`, `scrolling` (třídy `Layout::Tiled::C*Algorithm`
+v binárce) plus `lua:<jméno>`. `hyprctl layouts` je nepoužije — s Lua configem vrací
+`unknown request`.
+
+**Za běhu se layout přepnout nedá, a je to potvrzené z několika stran:**
+
+- `hl.layout` má jediný člen. Ověřeno na živém kompozitoru:
+  `hyprctl repl 'local t={} for k in pairs(hl.layout) do t[#t+1]=k end return table.concat(t,",")'`
+  → `register`.
+- `hyprctl keyword` i `hyprctl layouts` vrací `unknown request` (s Lua configem obojí zmizelo).
+- **`hl.dsp.layout("…")` není přepínač layoutu**, ale `layoutmsg` do toho aktivního —
+  protějšek volitelného `layout_msg(ctx, msg)` v provideru. Proto je `Super+J`
+  (`hl.dsp.layout("togglesplit")`) pod `lua:thirds` tichý no-op: provider `layout_msg` nemá.
+- Jediná neprozkoumaná cesta je `hyprctl eval` / `hyprctl repl` (v binárce
+  `eval is only supported with the lua config manager`) volající `hl.config` za běhu.
+  Netestováno; `hyprctl repl` je mimochodem výborný read-only nástroj na zkoumání `hl.*`.
+
+Změna layoutu tedy = editace `hyprland.lua` a `just reload`.
+
+**Správa oken z klávesnice je v `hyprland.lua` hned za focus bindy.** `Super+Shift+šipky`
+přesun, `Super+Tab`/`+Shift` swap next/prev, `Super+Ctrl+šipky` resize, `Super+F`/`+Shift`
+fullscreen/maximized, `Super+Shift+P`/`+C` pin/center. Naměřené chování:
+
+- **Přesun a swap pod `lua:thirds` fungují bez zásahu do provideru** —
+  `Config::Lua::Layouts::CLuaTiledAlgorithm` má `moveTargetInDirection` i `swapTargets`,
+  takže stačí přehodit pořadí v `ctx.targets` a `recalculate` doběhne sám. `layout_msg`
+  k tomu potřeba není.
+- **Resize je pod `lua:thirds` no-op**, i když `CLuaTiledAlgorithm::resizeTarget` existuje.
+  Dispatcher projde (`ok`, nic v logu), ale geometrie
+  se nezmění — `recalculate` počítá třetiny od nuly a uloženou velikost ignoruje. Na ws 4
+  a 5 (`scrolling`, `master`) resize funguje, ověřeno: 2526 → 2126 px po `x = -400`.
+  `relative = true` znamená **delta v pixelech**, ne cílový rozměr.
+- `maximized` respektuje gapy i rezervovanou zónu waybaru (`[22,70] 5076×1348`), `fullscreen`
+  ne (`[0,0] 5120×1440`).
+- `pin` a `center` jsou **jen pro plovoucí okna**; na dlaždicovém jen varují
+  (`Window does not qualify to be pinned`, `No floating window found`).
 
 ### NVIDIA + Nix startup
 
@@ -224,6 +287,34 @@ dnd/tray/cpu/memory/network/language/pulseaudio/hud + napájení (vpravo). Vyža
 
 `just reload-waybar` po změně CSS (posílá SIGUSR2, jehož default je `reload` — viz
 `waybar(5)`), `just restart-waybar` po změně geometrie, `just waybar-log` na chyby.
+
+#### Workspaces: ikona kóduje layout
+
+`format-icons` u `hyprland/workspaces` nenese stav, ale **layout workspace**:
+
+| ikona | escape | layout |
+|---|---|---|
+|  | `\uf0db` (fa-columns) | `lua:thirds` — klíč `default`, tedy ws 1–3 a 6–10 |
+|  | `\uf07e` (fa-arrows-h) | `scrolling` — ws 4 |
+|  | `\uf00b` (fa-th-list) | `master` — ws 5 |
+
+Všechny tři jsou v BMP, takže se píšou jednoduchým `\uXXXX` bez surrogate páru (na rozdíl
+od `network.format-ethernet` níž). Mapování žije **na dvou místech naráz**: workspace
+rules v `hyprland.lua` a tenhle blok. Změna layoutu bez změny ikony je tichý rozchod.
+
+**Klíč `active` tady být nesmí.** Pořadí hledání ikony ve waybaru 0.15.0 je
+`urgent` → `active` → `special` → **jméno workspace** → `visible` → `empty` → `persistent`
+→ `default` (odvozeno z `Workspace::selectIcon` v `.waybar-wrapped`, binárka není
+stripnutá; man page `waybar-hyprland-workspaces.5` `urgent` neuvádí vůbec a u `format-icons`
+si protiřečí, jestli klíčem je jméno nebo id). Kdyby `active` zůstal, přebil by klíč
+podle jména a **aktivní workspace by o značku layoutu přišel**. Aktivní stav proto hlásí
+výhradně CSS — `#workspaces button.active` má rámeček v `@accent` a text `@accent-hot`,
+což je jednoznačné i bez vlastní ikony.
+
+Klíč se porovnává se **jménem** workspace, ne s id — u nepojmenovaných je jméno shodou
+okolností `"1"`, `"2"`, …, takže `"4"` sedí; pojmenovaný workspace by potřeboval klíč
+podle jména. `default` pokrývá zbytek, tedy i workspace 6–10 a `special:magic`, které
+globální `lua:thirds` opravdu mají.
 
 #### Tlačítka napájení
 

@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# Vypnutí, restart a odhlášení — pro waybar moduly custom/poweroff,
+# custom/reboot a custom/logout.
+#
+# Použití: hypr-power [poweroff|reboot|logout] [--force]
+#
+# Bez --force se skript nejdřív zeptá přes wofi. Tlačítko v panelu je jedno
+# kliknutí, které nejde vzít zpět, a sedí hned vedle ostatních modulů — proto
+# je potvrzení výchozí chování, ne volba. --force je pro skripty a keybindy.
+set -euo pipefail
+
+# wofi a hyprctl jsou jen v Nix profilu; waybar běží jako systemd user service,
+# jejíž PATH nix profil neobsahuje. systemctl je systémový (/usr/bin) a v nix
+# profilu není, takže ho prefix nepřestíní.
+export PATH="$HOME/.nix-profile/bin:$PATH"
+
+# Wofi s GDK_BACKEND=x11 v prostředí skončí na "Failed to connect to wayland
+# compositor". Waybar tu proměnnou nemá, takže klik v panelu je v pořádku,
+# ale z terminálu (a tedy z `just power`) ji zdědit může. Bez dialogu by se
+# akce tiše zrušila — což je bezpečné, ale matoucí.
+unset GDK_BACKEND
+
+usage() {
+    echo "Použití: $(basename "$0") [poweroff|reboot|logout] [--force]" >&2
+}
+
+action="${1:-}"
+force="${2:-}"
+
+case "$action" in
+    poweroff) question="Vypnout počítač?";  confirm_label="Vypnout" ;;
+    reboot)   question="Restartovat počítač?"; confirm_label="Restartovat" ;;
+    logout)   question="Odhlásit se?";      confirm_label="Odhlásit" ;;
+    *) usage; exit 2 ;;
+esac
+
+# Potvrzení přes wofi. "Zrušit" je záměrně první položka — wofi předvybírá
+# první řádek, takže Enter i Esc vedou k odchodu bez akce.
+#
+# Globální wofi config má natvrdo show=drun, proto explicitní flagy; styl se
+# dědí z ~/.config/wofi/style.css, aby dialog seděl s launcherem a audio menu.
+confirm() {
+    local answer
+    answer="$(printf '%s\n%s\n' "Zrušit" "$confirm_label" | wofi \
+        --show dmenu \
+        --prompt "$question" \
+        --width 400 \
+        --height 160 \
+        --insensitive)" || return 1
+    [[ "$answer" == "$confirm_label" ]]
+}
+
+if [[ "$force" != "--force" ]]; then
+    confirm || exit 0
+fi
+
+case "$action" in
+    poweroff) exec systemctl poweroff ;;
+    reboot)   exec systemctl reboot ;;
+    # hyprctl dispatch bere v 0.56 Lua, ne starou syntaxi ("exit" by skončilo
+    # na parse error). Vlastní hl.dispatch() se sem nepíše — hyprctl si výraz
+    # obaluje sám a dvojité volání hodí "expected a dispatcher".
+    logout)   exec hyprctl dispatch "hl.dsp.exit()" ;;
+esac

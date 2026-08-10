@@ -102,6 +102,10 @@ test-notify:
 audio:
     ~/.local/bin/hypr-audio-menu output
 
+# Otevřít potvrzovací dialog odhlášení (test tlačítek napájení ve waybaru)
+power:
+    ~/.local/bin/hypr-power logout
+
 # Screenshot výřezu myší (test bez klávesové zkratky)
 screenshot:
     ~/.local/bin/hypr-screenshot region save

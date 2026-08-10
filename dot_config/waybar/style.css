@@ -239,10 +239,14 @@ window#waybar {
  *
  * spacing je v configu 0, rytmus dělá padding tady. Oddělovač je překlad
  * hairline pravítka z hlavičky HUD dlaždice a dostávají ho všechny moduly
- * kromě posledního ve skupině — poslední jsou #clock a #pulseaudio, které
- * se nikdy neschovávají. Prázdný #tray i skrytý #mpris mají nulovou šířku,
- * takže si oddělovač schovají samy. #language ho nemá, protože je sám
+ * kromě posledního ve skupině — poslední jsou #clock a #custom-poweroff,
+ * které se nikdy neschovávají. Prázdný #tray i skrytý #mpris mají nulovou
+ * šířku, takže si oddělovač schovají samy. #language ho nemá, protože je sám
  * uzavřený do index chipu.
+ *
+ * Při každé změně pořadí v modules-right je potřeba seznam oddělovačů níž
+ * přepsat — poslední modul ve skupině v něm být nesmí, jinak visí hairline
+ * na hraně ostrůvku.
  */
 #clock,
 #mpris,
@@ -252,6 +256,9 @@ window#waybar {
 #pulseaudio,
 #custom-hud,
 #custom-dnd,
+#custom-logout,
+#custom-reboot,
+#custom-poweroff,
 #tray {
     padding: 0 12px;
     background-color: transparent;
@@ -262,10 +269,13 @@ window#waybar {
 #mpris,
 #custom-hud,
 #custom-dnd,
+#custom-logout,
+#custom-reboot,
 #tray,
 #cpu,
 #memory,
-#network {
+#network,
+#pulseaudio {
     background-image: linear-gradient(@line, @line);
     background-position: right center;
     background-size: 1px 14px;
@@ -292,6 +302,14 @@ window#waybar {
 #custom-hud           { color: @accent-hot; }
 #custom-dnd           { color: @text-muted; }
 
+/* Napájení: odhlásit -> restartovat -> vypnout, úplně vpravo. Barva stoupá
+ * po stejné škále jako závažnost akce a končí na @danger — je to jediné,
+ * co ta tři tlačítka v panelu odliší od informačních modulů vlevo od nich.
+ * Samotný klik nic neukončí, ~/.local/bin/hypr-power se nejdřív zeptá. */
+#custom-logout        { color: @text-muted; }
+#custom-reboot        { color: @warn; }
+#custom-poweroff      { color: @danger; }
+
 /* DND zapnuté = protějšek "attention" stavu HUD dlaždice: výstražné šrafy
  * v danger na levé hraně. Oddělovač se musí zopakovat, background-image
  * není aditivní. */
@@ -315,6 +333,16 @@ window#waybar {
 #mpris:hover {
     color: @accent-hot;
     text-shadow: 0 0 8px alpha(@accent-hot, 0.55);
+}
+
+/* Napájení má vlastní hover v @danger, ne v @accent-hot. Ostatní moduly
+ * svítí azurově jako "dá se na mě kliknout"; tady má hover říct, do čeho
+ * kliknutí sáhne. Oddělovač zůstává, protože background-image se nepřepisuje. */
+#custom-logout:hover,
+#custom-reboot:hover,
+#custom-poweroff:hover {
+    color: @danger;
+    text-shadow: 0 0 8px alpha(@danger, 0.55);
 }
 
 /* ---- Index chip: rozložení klávesnice -------------------------------

@@ -204,10 +204,52 @@ commitem `dcbd90b`, který `LD_LIBRARY_PATH` do start hooku doplnil — ne race 
 
 ### Waybar
 
-`dot_config/waybar/config` je JSON. Moduly: workspaces (vlevo), clock (střed), tray/cpu/memory/network/language/pulseaudio (vpravo). Vyžaduje **JetBrainsMono Nerd Font**.
+`dot_config/waybar/config` je JSON. Moduly: workspaces (vlevo), mpris/clock (střed),
+dnd/tray/cpu/memory/network/language/pulseaudio/hud + napájení (vpravo). Vyžaduje
+**JetBrainsMono Nerd Font**.
 
 `just reload-waybar` po změně CSS (posílá SIGUSR2, jehož default je `reload` — viz
 `waybar(5)`), `just restart-waybar` po změně geometrie, `just waybar-log` na chyby.
+
+#### Tlačítka napájení
+
+Úplně vpravo, v pořadí `custom/hud`, `custom/logout`, `custom/reboot`, `custom/poweroff`
+— eskalace zleva doprava, nejzávažnější akce na kraji panelu. Všechna tři volají
+`dot_local/bin/executable_hypr-power` (nasazeno jako `~/.local/bin/hypr-power`).
+
+- `hypr-power [poweroff|reboot|logout] [--force]`
+- Bez `--force` se **nejdřív ptá přes wofi**. Tlačítko v panelu je jedno kliknutí, které
+  nejde vzít zpět, a sedí hned vedle informačních modulů. `--force` je pro skripty.
+- V dialogu je **„Zrušit" první položka** schválně — wofi předvybírá první řádek, takže
+  Enter i Esc vedou k odchodu bez akce. Ověřeno screenshotem.
+- `poweroff`/`reboot` jdou přes `systemctl`, který je jen systémový (`/usr/bin`), takže
+  ho prefix `~/.nix-profile/bin` v `PATH` nepřestíní. Polkit se neptá —
+  `busctl … CanPowerOff` i `CanReboot` vrací `yes` pro aktivní lokální session.
+- `logout` je `hyprctl dispatch "hl.dsp.exit()"`. V 0.56 to musí být Lua, ne staré `exit`,
+  a bez vlastního `hl.dispatch()` — hyprctl si výraz obaluje sám.
+
+Pasti:
+
+- **Skript si předsazuje `~/.nix-profile/bin` do `PATH`, takže ho nejde otestovat
+  stubováním přes `PATH`.** Stub se za nix profil nedostane a `logout --force` pak spustí
+  opravdový `hl.dsp.exit()` — naměřeno tvrdě 10. 8. 2026: session spadla v 00:42:08
+  a GDM ji vrátil v 00:42:34. Testovat se dá jen samotné wofi se stejnými argumenty,
+  nebo kopie skriptu s upraveným řádkem `export PATH`.
+- **`unset GDK_BACKEND` na začátku je nutný.** Waybar tu proměnnou v prostředí nemá
+  (proto pravý klik na audio funguje), ale terminál — a tedy i `just power` — ji zdědit
+  může a wofi pak skončí na `Failed to connect to wayland compositor`. Bez dialogu by se
+  akce tiše zrušila; bezpečné, ale matoucí. Stejná past je v sekci App launcher.
+- **Wofi je layer surface, ne toplevel** — v `hyprctl clients` není, hledá se
+  v `hyprctl layers` pod namespace `wofi`.
+- **Nixová binárka se v procesech jmenuje `.wofi-wrapped`**, takže `pkill -x wofi`
+  netrefí nic a tváří se přitom úspěšně. Platí i pro `.waybar-wrapped`
+  a `.Hyprland-wrapped`.
+- **Oddělovače v CSS se musí přepsat při každé změně pořadí v `modules-right`.** Poslední
+  modul ve skupině v seznamu být nesmí, jinak visí hairline na hraně ostrůvku. Po přesunu
+  `custom/hud` doprava přibyl oddělovač `#pulseaudio` a poslední je `#custom-poweroff`.
+
+`just power` otevře potvrzovací dialog odhlášení bez klávesové zkratky. Keybind zatím
+žádný není — `Super+M` v `hyprland.lua` volá `hl.dsp.exit()` napřímo, bez potvrzení.
 
 #### Geometrie: centrovaný plovoucí panel
 

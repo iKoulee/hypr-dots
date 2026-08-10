@@ -60,6 +60,12 @@ Startup sekvence v `hl.on("hyprland.start")`:
 2. `systemctl --user import-environment` — zpřístupní stejné proměnné všem user services (včetně `SSH_AUTH_SOCK`, viz sekce Keyring a hesla)
 3. `systemctl --user start hyprland-session.target` — nastartuje všechny session services
 
+**Do těch dvou seznamů se `LD_LIBRARY_PATH` nepřidává.** Dostala by se tím i k D-Bus
+aktivovaným procesům (`snap userd`, `xdg-desktop-portal`) a všechno, co spustí přes
+`.desktop` soubor, by ji zdědilo — což láme systémové aplikace, viz sekce LibreOffice.
+Jediná služba, která ji potřebuje, je hyprpaper a má ji adresně přes `Environment=`
+ve svém unitu.
+
 Unit soubory v `dot_config/systemd/user/`:
 
 - `hyprland-session.target` — seskupuje session services (`Wants=` waybar, hyprpaper, mako, keepassxc, hyprpolkitagent, playerctld, hypr-hud)
@@ -131,7 +137,7 @@ a `just reload`.
 ### NVIDIA + Nix startup
 
 `dot_local/bin/executable_start-hyprland-nix` (nasazeno jako `~/.local/bin/start-hyprland-nix`):
-- Přidává `~/.nix-profile/bin` na začátek `PATH` — klíčové při startu z display manageru, bez toho `exec_cmd` volání v Lua configu tiše selžou
+- Přidává `~/.local/bin` a `~/.nix-profile/bin` na začátek `PATH` — klíčové při startu z display manageru, bez toho `exec_cmd` volání v Lua configu tiše selžou. `~/.local/bin` musí být **první**, jinak session mine shimy (`keepassxc`, `qs`, `libreoffice`) a chytí je jen terminál, kterému je přidá `~/.profile`
 - Nastavuje NVIDIA/Wayland env proměnné (`GBM_BACKEND`, `__GLX_VENDOR_LIBRARY_NAME`, …)
 - Spouští `~/.nix-profile/bin/Hyprland`
 
@@ -195,12 +201,20 @@ Z toho plyne přímý **konflikt s pravidlem v sekci Keyring a hesla**: nixové 
 potřebují `UnsetEnvironment=LD_LIBRARY_PATH`, hyprpaper naopak spadne. Rozhoduje se to
 per-service — do `hyprpaper.service` ten řádek **nepatří**.
 
+Proměnná se do služby dostává **adresně přes `Environment=` v `hyprpaper.service`**, ne
+přes `import-environment` ve start hooku. Ten ji šířil do celé systemd/D-Bus poloviny
+session a lámal tím systémové aplikace spouštěné přes portál (viz sekce LibreOffice).
+Ověřeno po přepnutí: `systemctl --user unset-environment LD_LIBRARY_PATH` + restart —
+hyprpaper naběhl a `hyprctl hyprpaper listactive` vrátil tapetu, zatímco waybar, mako
+a playerctld běží bez té proměnné úplně.
+
 `GBM_BACKENDS_PATH` ze `start-hyprland-nix` je mrtvá proměnná: chybí v obou seznamech ve
 start hooku, takže se do systemd services nedostane, a podle tabulky výše by `LD_LIBRARY_PATH`
 stejně nenahradila.
 
 Historická poznámka: smyčka ~37 core dumpů 4. 8. 2026 mezi 17:14 a 17:18 byla stav **před**
 commitem `dcbd90b`, který `LD_LIBRARY_PATH` do start hooku doplnil — ne race při startu.
+Dnes už tam není a roli přebral `Environment=` v unitu.
 
 ### Waybar
 
@@ -826,10 +840,11 @@ Service jméno vlastnit nemůže, a z `/run/user/1000/` vidí jen svůj `snap.ke
 adresář, takže nedosáhne na ssh-agent socket. Obojí je tichý fail, ne chybová hláška.
 
 **Past: `LD_LIBRARY_PATH` vs. nix binárky.** `start-hyprland-nix` kvůli NVIDII nastavuje
-`LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu` a `hyprland.lua` ho posílá do systemd přes
-`import-environment`. Nixová Qt aplikace si pak natáhne systémové Qt a spadne
-(`requires Qt 5.15.19, found Qt 5.15.18`). Postižené je **všechno v session**, ne jen
-systemd — terminály, keybindy i D-Bus aktivované procesy. Řeší se to na dvou místech:
+`LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu` a dědí to všechno, co Hyprland spustí. Nixová
+Qt aplikace si pak natáhne systémové Qt a spadne (`requires Qt 5.15.19, found Qt 5.15.18`).
+Postižené jsou terminály i keybindy. (Do systemd a D-Bus aktivace už to **neteče** —
+`import-environment` tu proměnnou nepřenáší, viz sekce Autostart.) Řeší se to na dvou
+místech:
 
 - `keepassxc.service` a `hyprpolkitagent.service` mají v `[Service]` řádek
   `UnsetEnvironment=LD_LIBRARY_PATH`, takže nezávisí na `~/.local/bin`
@@ -839,9 +854,20 @@ systemd — terminály, keybindy i D-Bus aktivované procesy. Řeší se to na d
   i `Exec=` v D-Bus service souboru — proto **ne** přes `nixBin`, na rozdíl od wofi
   a makoctl.
 
+To pořadí v `PATH` platilo dlouho **jen v terminálu** — `~/.profile` ho tam přidá, ale
+`start-hyprland-nix` ne, takže PATH Hyprlandu (a tedy i wofi a všeho z keybindů) shim
+míjel; ověřitelné v `/proc/<hyprland>/environ`. Proto míří keybindy a `Exec=` na shim
+absolutní cestou. Dorovnané je to až od doby, kdy `start-hyprland-nix` předsazuje
+`~/.local/bin` — absolutní cesty zůstávají, protože nezávisí na tom, jestli je
+`~/.local/bin` nasazený.
+
 **Každá další nixová Qt/GTK aplikace bude potřebovat obojí.** A u Qt6 aplikace, která
 sama kreslí okno, to nestačí — po odstranění proměnné Qt nenajde EGL a okno se nevykreslí.
 Tam je potřeba ještě `nixGL`; naměřená tabulka je v sekci Control center.
+
+**Past má i opačný směr:** systémový `LD_LIBRARY_PATH` neláme jen nixové aplikace, ale
+i systémové, které mají privátní knihovny mimo `ld.so.cache` a shánějí je přes `$ORIGIN`.
+Viz sekce LibreOffice.
 
 Druhá past: `hyprpolkitagent` se instaluje do `libexec/`, ne do `bin/`, takže
 v `~/.nix-profile/bin/` není — `ExecStart` míří na `%h/.nix-profile/libexec/hyprpolkitagent`.
@@ -877,6 +903,87 @@ míří na `~/.nix-profile/bin/keepassxc-proxy`. **Se snap Firefoxem to nefunguj
 AppArmor profil povoluje exec v `$HOME` jen pro cesty nezačínající tečkou
 (`owner @{HOME}/[^s.]** rwklix`) a pro `/nix/store` nemá pravidlo žádné. Řešení je
 Firefox mimo snap.
+
+### LibreOffice
+
+Systémový (debianí) LibreOffice, žádný nix. Přesto potřebuje shim — `LD_LIBRARY_PATH`
+ze `start-hyprland-nix` ho **rozbije**, což je přesná inverze pasti ze sekce Keyring
+a hesla: tam systémová cesta láme nixové Qt, tady láme systémovou aplikaci.
+
+```
+soffice.bin: error while loading shared libraries: libreglo.so: cannot open shared object file
+```
+
+Mechanismus (`LD_DEBUG=libs`), protože z hlášky se odhadnout nedá:
+
+1. `soffice.bin` má `RUNPATH=$ORIGIN` a linkuje `libuno_sal.so.3`.
+2. `LD_LIBRARY_PATH` má přednost před `DT_RUNPATH`, takže se ta knihovna najde jako
+   **symlink** `/usr/lib/x86_64-linux-gnu/libuno_sal.so.3 → ../libreoffice/program/…`.
+3. **`$ORIGIN` glibc odvozuje z cesty, kterou loader knihovnu otevřel, ne z realpath.**
+   Rozbalí se tedy na `/usr/lib/x86_64-linux-gnu`, ne na `/usr/lib/libreoffice/program`.
+4. Privátní `libreglo.so` a `libunoidllo.so` (balíček `uno-libs-private`) jsou jen
+   v `program/` a v `ld.so.cache` nejsou (`ldconfig -p | grep reglo` → nic) → not found.
+
+Naměřeno na `ldd /usr/lib/libreoffice/program/soffice.bin`:
+
+| `LD_LIBRARY_PATH` | not found |
+|---|---|
+| nenastaveno | 0 |
+| `/usr/lib/x86_64-linux-gnu` | 2 |
+| `/usr/lib/x86_64-linux-gnu/gbm` | 0 |
+| `/nonexistent` | 0 |
+
+Rozhoduje tedy **přítomnost `/usr/lib/x86_64-linux-gnu`**, ne to, že je proměnná
+nastavená. Zúžit ji ve `start-hyprland-nix` na podadresář `gbm` ale nejde — systémový
+`libgbm.so.1` leží přímo v tom adresáři a hyprpaper na něm podle měření v sekci Tapeta
+stojí.
+
+Řešení je `dot_local/bin/executable_libreoffice` (`unset LD_LIBRARY_PATH` + `exec`
+absolutní cestou na `/usr/lib/libreoffice/program/soffice`), stejný vzor jako
+`executable_keepassxc`. Dvě specifika:
+
+- **Shim musí pokrýt i zkratky.** `/usr/bin/lowriter` a spol. nevolají `libreoffice`, ale
+  `/usr/lib/libreoffice/program/soffice` absolutní cestou, takže shim na `libreoffice` je
+  mine. Jsou proto nasazené jako symlinky na tentýž skript a ten se podle `${0##*/}`
+  rozhodne, jestli má dosadit `--writer`/`--calc`/… Zdrojově je to
+  `dot_local/bin/symlink_{soffice,lowriter,localc,loimpress,lodraw,lomath}`.
+- **`unopkg` pokrytý není** — je to jiná binárka a spouštět ji ručně z terminálu se
+  reálně neděje; z běžícího LibreOffice se dědí už čisté prostředí.
+
+Všech šest `libreoffice-*.desktop` má `Exec=libreoffice …` bez cesty, takže spuštění
+z wofi jde přes `PATH` — a právě kvůli tomu musí být `~/.local/bin` v `PATH` Hyprlandu
+(viz NVIDIA + Nix startup).
+
+**Shim sám ale nestačí na „otevřít systémovým handlerem" z jiné aplikace.** Snap
+Thunderbird (a snapy obecně) tu žádost neprovádí sám — předá ji `snap userd`
+(`io.snapcraft.Launcher`), respektive `xdg-desktop-portal`. Ty běží na hostiteli jako
+D-Bus aktivované procesy pod `user@1000.service`, takže jejich prostředí pochází ze
+start hooku v `hyprland.lua`, ne z Hyprlandu — a dokud v něm byl `LD_LIBRARY_PATH`,
+spouštěly LibreOffice rozbité. **Proto ta proměnná v `import-environment`
+a `dbus-update-activation-environment` být nesmí** (viz sekce Autostart); hyprpaper ji
+má adresně přes `Environment=`.
+
+Diagnostika je čtení prostředí konkrétního launcheru, ne odhad — po změně tam musí být
+`~/.local/bin` a žádný `LD_LIBRARY_PATH`:
+
+```bash
+for p in $(pgrep -f "xdg-desktop-portal$|snap userd"); do
+  tr '\0' '\n' < /proc/$p/environ | grep -E "^(PATH|LD_LIBRARY_PATH)="
+done
+```
+
+Pozor, tyhle procesy si prostředí drží od svého startu, takže se změna projeví až po
+odhlášení — nebo po `dbus-update-activation-environment LD_LIBRARY_PATH=` (prázdná
+hodnota je neškodná, naměřeno) a jejich zabití; znovu se aktivují samy.
+
+Kontrola bez odhlášení, v simulovaném prostředí wofi:
+
+```bash
+env -i HOME="$HOME" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+  LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu/gbm: \
+  PATH="$HOME/.local/bin:$HOME/.nix-profile/bin:/usr/bin:/bin" \
+  sh -c 'command -v libreoffice; libreoffice --version'
+```
 
 ### Input layout
 

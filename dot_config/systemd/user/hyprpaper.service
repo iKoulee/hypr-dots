@@ -12,6 +12,11 @@ StartLimitBurst=5
 # POZOR: sem nepatří UnsetEnvironment=LD_LIBRARY_PATH (na rozdíl od keepassxc.service
 # a hyprpolkitagent.service). hyprpaper přes něj hledá systémový GBM/EGL stack —
 # bez něj spadne na ABRT. Viz sekce „Tapeta (hyprpaper)" v CLAUDE.md.
+#
+# Proměnná se sem dostává adresně, ne přes `import-environment` v hyprland.lua —
+# ta by ji dala i D-Bus aktivovaným procesům (snap userd, xdg-desktop-portal) a jimi
+# spouštěné systémové aplikace by se rozbily. Viz sekce LibreOffice v CLAUDE.md.
+Environment=LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu/gbm
 ExecStart=%h/.nix-profile/bin/hyprpaper
 Restart=on-failure
 RestartSec=3

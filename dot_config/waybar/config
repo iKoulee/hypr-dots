@@ -10,13 +10,34 @@
     "reload_style_on_change": true,
     "modules-left": ["hyprland/workspaces"],
     "modules-center": ["mpris", "clock"],
-    "modules-right": ["custom/hud", "custom/dnd", "tray", "cpu", "memory", "network", "hyprland/language", "pulseaudio"],
+    "modules-right": ["custom/dnd", "tray", "cpu", "memory", "network", "hyprland/language", "pulseaudio", "custom/hud", "custom/logout", "custom/reboot", "custom/poweroff"],
 
     "custom/hud": {
         "format": "\uf1de",
         "tooltip": true,
         "tooltip-format": "Control center (Super+C)",
         "on-click": "$HOME/.local/bin/hypr-hud toggle"
+    },
+
+    "custom/logout": {
+        "format": "\uf08b",
+        "tooltip": true,
+        "tooltip-format": "Odhl\u00e1sit se",
+        "on-click": "$HOME/.local/bin/hypr-power logout"
+    },
+
+    "custom/reboot": {
+        "format": "\uf021",
+        "tooltip": true,
+        "tooltip-format": "Restartovat",
+        "on-click": "$HOME/.local/bin/hypr-power reboot"
+    },
+
+    "custom/poweroff": {
+        "format": "\uf011",
+        "tooltip": true,
+        "tooltip-format": "Vypnout",
+        "on-click": "$HOME/.local/bin/hypr-power poweroff"
     },
 
     "custom/dnd": {

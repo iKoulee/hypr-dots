@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 
-# Nix binaries (needed when launched from a display manager without sourcing .profile)
-export PATH="$HOME/.nix-profile/bin:$PATH"
+# Nix binaries (needed when launched from a display manager without sourcing .profile).
+# ~/.local/bin musí být první — jsou v něm shimy (keepassxc, qs, libreoffice), které
+# stíní binárku z nix profilu resp. z /usr/bin. Bez toho je mají jen terminály (z .profile)
+# a všechno spuštěné z Hyprlandu — hlavně wofi drun — by shimy minulo.
+export PATH="$HOME/.local/bin:$HOME/.nix-profile/bin:$PATH"
 
 # 1. Vynucení cest k systémovým GBM ovladačům (Doplnění pro nixGL)
 export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu/gbm:$LD_LIBRARY_PATH

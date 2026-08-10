@@ -59,9 +59,15 @@ local menu        = nixBin .. "wofi --show drun"
 --   hl.exec_cmd("nm-applet")
 --   hl.exec_cmd("waybar & hyprpaper & firefox")
 -- end)
+-- LD_LIBRARY_PATH v seznamech schválně NENÍ. Dostala by se tím i do D-Bus aktivovaných
+-- procesů (snap userd, xdg-desktop-portal) a všechno, co spustí přes .desktop soubor,
+-- by mělo v prostředí /usr/lib/x86_64-linux-gnu — což láme systémové aplikace
+-- s privátními knihovnami za $ORIGIN. Viz sekce LibreOffice v CLAUDE.md.
+-- Jediná služba, která tu proměnnou opravdu potřebuje, je hyprpaper, a ta ji má
+-- adresně přes Environment= ve svém unit souboru.
 hl.on("hyprland.start", function ()
-  hl.exec_cmd("dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE GBM_BACKEND __GLX_VENDOR_LIBRARY_NAME LIBVA_DRIVER_NAME LD_LIBRARY_PATH SSH_AUTH_SOCK")
-  hl.exec_cmd("systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE GBM_BACKEND __GLX_VENDOR_LIBRARY_NAME LIBVA_DRIVER_NAME LD_LIBRARY_PATH SSH_AUTH_SOCK")
+  hl.exec_cmd("dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE GBM_BACKEND __GLX_VENDOR_LIBRARY_NAME LIBVA_DRIVER_NAME SSH_AUTH_SOCK")
+  hl.exec_cmd("systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE GBM_BACKEND __GLX_VENDOR_LIBRARY_NAME LIBVA_DRIVER_NAME SSH_AUTH_SOCK")
   hl.exec_cmd("systemctl --user start hyprland-session.target")
 end)
 
@@ -435,6 +441,7 @@ hl.bind(mainMod .. " + left",  hl.dsp.focus({ direction = "left" }))
 hl.bind(mainMod .. " + right", hl.dsp.focus({ direction = "right" }))
 hl.bind(mainMod .. " + up",    hl.dsp.focus({ direction = "up" }))
 hl.bind(mainMod .. " + down",  hl.dsp.focus({ direction = "down" }))
+
 
 -- Switch workspaces with mainMod + [0-9]
 -- Move active window to a workspace with mainMod + SHIFT + [0-9]

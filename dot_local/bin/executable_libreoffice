@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+#
+# Shim před systémovým LibreOffice.
+#
+# start-hyprland-nix kvůli NVIDII exportuje
+#   LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu/gbm
+# a to dědí celá session. LibreOffice pak skončí na
+#   soffice.bin: error while loading shared libraries: libreglo.so: cannot open shared object file
+#
+# Proč: soffice.bin má RUNPATH=$ORIGIN a linkuje libuno_sal.so.3. LD_LIBRARY_PATH má
+# přednost před DT_RUNPATH, takže se ta knihovna najde jako symlink
+#   /usr/lib/x86_64-linux-gnu/libuno_sal.so.3 -> ../libreoffice/program/libuno_sal.so.3
+# a $ORIGIN se odvozuje z cesty, kterou loader použil, ne z realpath. Rozbalí se tedy na
+# /usr/lib/x86_64-linux-gnu, kde privátní libreglo.so a libunoidllo.so nejsou (a v
+# ld.so.cache taky ne). Podrobnosti a naměřená tabulka jsou v CLAUDE.md, sekce LibreOffice.
+#
+# Je to obrácená varianta pasti od keepassxc/qs: tam systémový LD_LIBRARY_PATH lámal
+# nixové Qt aplikace, tady láme systémovou aplikaci s privátním $ORIGIN adresářem.
+#
+# Nasazuje se i pod jmény soffice/lowriter/localc/loimpress/lodraw/lomath (symlinky) —
+# ty v /usr/bin volají soffice absolutní cestou, takže by shim na `libreoffice` minuly.
+
+unset LD_LIBRARY_PATH
+
+case "${0##*/}" in
+    lowriter)  set -- --writer  "$@" ;;
+    localc)    set -- --calc    "$@" ;;
+    loimpress) set -- --impress "$@" ;;
+    lodraw)    set -- --draw    "$@" ;;
+    lomath)    set -- --math    "$@" ;;
+esac
+
+# Absolutní cesta na program/, ne /usr/bin/libreoffice — ten je v PATH až za shimem,
+# ale takhle je rekurze vyloučená natvrdo.
+exec /usr/lib/libreoffice/program/soffice "$@"

@@ -960,6 +960,30 @@ Tam je potřeba ještě `nixGL`; naměřená tabulka je v sekci Control center.
 i systémové, které mají privátní knihovny mimo `ld.so.cache` a shánějí je přes `$ORIGIN`.
 Viz sekce LibreOffice.
 
+**Třetí past: tray ikona závisí na pořadí startu.** Qt se rozhoduje mezi SNI
+a starým X11 systrayem **v okamžiku vytvoření tray ikony**, tedy hned při startu, a zpětně
+to nedožene. `org.kde.StatusNotifierWatcher` poskytuje waybar; oba unity ale startují
+prakticky současně (naměřeno 16 ms rozdíl) a waybar to jméno registruje až ~400 ms po
+startu procesu. Kdo prohraje závod, spadne na X11 systray, který v Hyprlandu nikdo nemá —
+ikona pak **není nikde a nic se nezaloguje**, služba přitom běží a Secret Service drží.
+Samotné `After=waybar.service` nestačí (systemd čeká na start procesu, ne na registraci
+jména), proto je v unitu navíc
+
+```
+ExecStartPre=-/usr/bin/gdbus wait --session --timeout 30 org.kde.StatusNotifierWatcher
+```
+
+Prefix `-` je schválně: bez waybaru má keepassxc naběhnout i tak, kvůli Secret Service.
+Kontrola, kdo je reálně v trayi (keepassxc tam musí mít vlastní `:1.N/StatusNotifierItem`,
+`busctl --user list | grep keepassxc` dá odpovídající PID):
+
+```bash
+busctl --user get-property org.kde.StatusNotifierWatcher /StatusNotifierWatcher \
+  org.kde.StatusNotifierWatcher RegisteredStatusNotifierItems
+```
+
+Stejný závod hrozí každé další tray aplikaci spouštěné z `hyprland-session.target`.
+
 Druhá past: `hyprpolkitagent` se instaluje do `libexec/`, ne do `bin/`, takže
 v `~/.nix-profile/bin/` není — `ExecStart` míří na `%h/.nix-profile/libexec/hyprpolkitagent`.
 

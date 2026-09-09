@@ -2,7 +2,7 @@
 Description=KeePassXC password manager
 Documentation=https://keepassxc.org/docs/
 PartOf=hyprland-session.target
-After=hyprland-session.target
+After=hyprland-session.target waybar.service
 
 [Service]
 # start-hyprland-nix nastavuje kvůli NVIDII LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu
@@ -10,6 +10,13 @@ After=hyprland-session.target
 # pak natáhly systémové Qt místo svého (keepassxc 2.7.12 chce Qt 5.15.19, systém
 # má 5.15.18) a spadly na "requires Qt 5.15.19, found Qt 5.15.18".
 UnsetEnvironment=LD_LIBRARY_PATH
+# Qt se rozhoduje mezi SNI a starým X11 systrayem v okamžiku vytvoření tray ikony,
+# tedy hned při startu. Bez běžícího org.kde.StatusNotifierWatcher (poskytuje ho
+# waybar) spadne na X11 systray, který v Hyprlandu nikdo nemá — ikona pak není
+# nikde a nic se nezaloguje. Samotné After=waybar.service nestačí, waybar jméno
+# registruje až ~400 ms po startu procesu. Prefix "-" je schválně: bez waybaru
+# má keepassxc naběhnout i tak, kvůli Secret Service.
+ExecStartPre=-/usr/bin/gdbus wait --session --timeout 30 org.kde.StatusNotifierWatcher
 ExecStart=%h/.nix-profile/bin/keepassxc
 Restart=on-failure
 RestartSec=3

@@ -970,10 +970,14 @@ Samotné `After=waybar.service` nestačí (systemd čeká na start procesu, ne n
 jména), proto je v unitu navíc
 
 ```
-ExecStartPre=-/usr/bin/gdbus wait --session --timeout 30 org.kde.StatusNotifierWatcher
+ExecStartPre=-/usr/bin/gdbus wait --session --timeout 10 org.kde.StatusNotifierWatcher
 ```
 
 Prefix `-` je schválně: bez waybaru má keepassxc naběhnout i tak, kvůli Secret Service.
+Timeout je krátký záměrně — naměřeno 370–395 ms na čtyřech boot cyklech, takže 10 s je
+25násobná rezerva. Delší čekání navíc rozšiřuje okno, ve kterém D-Bus aktivace
+`org.freedesktop.secrets` (je activatable, `Exec=` míří na shim) spustí druhou instanci
+mimo unit.
 Kontrola, kdo je reálně v trayi (keepassxc tam musí mít vlastní `:1.N/StatusNotifierItem`,
 `busctl --user list | grep keepassxc` dá odpovídající PID):
 

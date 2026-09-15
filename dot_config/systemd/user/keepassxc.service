@@ -16,9 +16,13 @@ UnsetEnvironment=LD_LIBRARY_PATH
 # tedy hned při startu. Bez běžícího org.kde.StatusNotifierWatcher (poskytuje ho
 # waybar) spadne na X11 systray, který v Hyprlandu nikdo nemá — ikona pak není
 # nikde a nic se nezaloguje. Samotné After=waybar.service nestačí, waybar jméno
-# registruje až ~400 ms po startu procesu. Prefix "-" je schválně: bez waybaru
-# má keepassxc naběhnout i tak, kvůli Secret Service.
-ExecStartPre=-/usr/bin/gdbus wait --session --timeout 30 org.kde.StatusNotifierWatcher
+# registruje až ~400 ms po startu procesu (naměřeno 370-395 ms na čtyřech boot
+# cyklech). Prefix "-" je schválně: bez waybaru má keepassxc naběhnout i tak,
+# kvůli Secret Service. Timeout je proto krátký — čekání jen překlenuje ty
+# stamilisekundy a delší by škodilo dvakrát: odkládá Secret Service a hlavně
+# rozšiřuje okno, ve kterém D-Bus aktivace org.freedesktop.secrets (Exec= míří
+# na shim ~/.local/bin/keepassxc) spustí druhou instanci mimo tenhle unit.
+ExecStartPre=-/usr/bin/gdbus wait --session --timeout 10 org.kde.StatusNotifierWatcher
 ExecStart=%h/.nix-profile/bin/keepassxc
 Restart=on-failure
 RestartSec=3

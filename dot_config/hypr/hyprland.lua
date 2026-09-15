@@ -235,6 +235,13 @@ hl.animation({ leaf = "workspacesIn",  enabled = true,  speed = 1.21, bezier = "
 hl.animation({ leaf = "workspacesOut", enabled = true,  speed = 1.94, bezier = "almostLinear", style = "fade" })
 hl.animation({ leaf = "zoomFactor",    enabled = true,  speed = 7,    bezier = "quick" })
 
+-- Special workspace (scratchpad `magic` a quake terminál níž). Bez těchto dvou
+-- leafů dědí fade z `workspaces`; `slidevert` dá sjezd shora, o který u quake
+-- terminálu jde. Rychlosti kopírují dvojici layersIn/layersOut — rychlý nájezd,
+-- pomalejší odjezd. Platí to i pro `Super+S`, sjezd shora mu sedí taky.
+hl.animation({ leaf = "specialWorkspaceIn",  enabled = true, speed = 4,    bezier = "easeOutQuint", style = "slidevert" })
+hl.animation({ leaf = "specialWorkspaceOut", enabled = true, speed = 1.94, bezier = "linear",       style = "slidevert" })
+
 -- Layout per workspace. Přepnout layout za běhu nejde — `hl.layout` má jediný
 -- člen (`register`) a `hyprctl keyword` i `hyprctl layouts` s Lua configem vrací
 -- `unknown request`, viz CLAUDE.md. Tohle je jediná podepřená cesta k víc než
@@ -248,6 +255,22 @@ hl.animation({ leaf = "zoomFactor",    enabled = true,  speed = 7,    bezier = "
 -- `format-icons` v `dot_config/waybar/config`, modul `hyprland/workspaces`.
 hl.workspace_rule({ workspace = "4", layout = "scrolling" })
 hl.workspace_rule({ workspace = "5", layout = "master" })
+
+-- Quake terminál: special workspace, který si při prvním vyvolání sám spustí
+-- kitty. `on_created_empty` je pole HL.WorkspaceRuleSpec (viz stub), takže na to
+-- není potřeba plugin ani démon. Vyvolání je `Super+grave` dole u bindů,
+-- geometrie je window rule `quake-term` u ostatních float pravidel.
+--
+-- Vlastní `--class` je povinná — bez ní by geometrické pravidlo sedlo na každé
+-- kitty okno, včetně toho ze `Super+Q`.
+--
+-- POZOR: `misc.close_special_on_empty` je default true, takže po `exit` v shellu
+-- workspace zanikne a další vyvolání spustí čerstvé kitty. Stav session přežije
+-- schování, ne ukončení shellu.
+hl.workspace_rule({
+    workspace        = "special:quake",
+    on_created_empty = terminal .. " --class quake-term",
+})
 
 -- Ref https://wiki.hypr.land/Configuring/Basics/Workspace-Rules/
 -- "Smart gaps" / "No gaps when only"
@@ -506,6 +529,10 @@ end
 hl.bind(mainMod .. " + S",         hl.dsp.workspace.toggle_special("magic"))
 hl.bind(mainMod .. " + SHIFT + S", hl.dsp.window.move({ workspace = "special:magic" }))
 
+-- Quake terminál. Workspace `special:quake` si kitty spustí sám při prvním
+-- vyvolání (workspace rule s on_created_empty výš), tady stačí přepínač.
+hl.bind(mainMod .. " + grave",     hl.dsp.workspace.toggle_special("quake"))
+
 -- Scroll through existing workspaces with mainMod + scroll
 hl.bind(mainMod .. " + mouse_down", hl.dsp.focus({ workspace = "e+1" }))
 hl.bind(mainMod .. " + mouse_up",   hl.dsp.focus({ workspace = "e-1" }))
@@ -645,4 +672,20 @@ hl.window_rule({
 
     float  = true,
     center = true,
+})
+
+-- Quake terminál. Geometrie plovoucího okna, které si sám spouští workspace rule
+-- `special:quake` výš — 60 % šířky × 45 % výšky monitoru, zarovnané nahoře.
+-- `y = 56` je rezervovaná zóna waybaru (48 px) plus 8 px mezera, tedy stejná
+-- hodnota, na jakou se sám usadil hypr-hud.
+--
+-- Matchuje se na class z `--class quake-term`, ne na `kitty` — normální terminál
+-- ze `Super+Q` musí zůstat dlaždicový.
+hl.window_rule({
+    name  = "quake-term",
+    match = { class = "^quake-term$" },
+
+    float = true,
+    size  = "60% 45%",
+    move  = "20% 56",
 })

@@ -65,6 +65,11 @@ restart-hud:
 hud:
     ~/.local/bin/hypr-hud toggle
 
+# hyprctl dispatch bere v 0.56 Lua a výraz si obaluje sám — žádné hl.dispatch().
+# Vyvolat/schovat quake terminál (test bez klávesové zkratky)
+quake:
+    hyprctl dispatch "hl.dsp.workspace.toggle_special('quake')"
+
 # Zavřít control center (záchranná brzda, kdyby držel klávesnici)
 hud-close:
     ~/.local/bin/hypr-hud close

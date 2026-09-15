@@ -19,9 +19,10 @@ UnsetEnvironment=LD_LIBRARY_PATH
 # registruje až ~400 ms po startu procesu (naměřeno 370-395 ms na čtyřech boot
 # cyklech). Prefix "-" je schválně: bez waybaru má keepassxc naběhnout i tak,
 # kvůli Secret Service. Timeout je proto krátký — čekání jen překlenuje ty
-# stamilisekundy a delší by škodilo dvakrát: odkládá Secret Service a hlavně
-# rozšiřuje okno, ve kterém D-Bus aktivace org.freedesktop.secrets (Exec= míří
-# na shim ~/.local/bin/keepassxc) spustí druhou instanci mimo tenhle unit.
+# stamilisekundy a přitom přímo prodlužuje, jak dlouho visí klient, který si řekl
+# o hesla: org.freedesktop.secrets je D-Bus activatable a aktivace jde přes
+# SystemdService= na tenhle unit, takže požadavek čeká, než ExecStartPre doběhne.
+# Limit dbusu na aktivaci (service_start_timeout) je 120 s, 10 s se tam vejde.
 ExecStartPre=-/usr/bin/gdbus wait --session --timeout 10 org.kde.StatusNotifierWatcher
 ExecStart=%h/.nix-profile/bin/keepassxc
 Restart=on-failure

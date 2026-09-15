@@ -236,11 +236,17 @@ hl.animation({ leaf = "workspacesOut", enabled = true,  speed = 1.94, bezier = "
 hl.animation({ leaf = "zoomFactor",    enabled = true,  speed = 7,    bezier = "quick" })
 
 -- Special workspace (scratchpad `magic` a quake terminál níž). Bez těchto dvou
--- leafů dědí fade z `workspaces`; `slidevert` dá sjezd shora, o který u quake
--- terminálu jde. Rychlosti kopírují dvojici layersIn/layersOut — rychlý nájezd,
--- pomalejší odjezd. Platí to i pro `Super+S`, sjezd shora mu sedí taky.
-hl.animation({ leaf = "specialWorkspaceIn",  enabled = true, speed = 4,    bezier = "easeOutQuint", style = "slidevert" })
-hl.animation({ leaf = "specialWorkspaceOut", enabled = true, speed = 1.94, bezier = "linear",       style = "slidevert" })
+-- leafů dědí fade z `workspaces`. Rychlosti kopírují dvojici layersIn/layersOut
+-- — rychlý nájezd, pomalejší odjezd. Platí to i pro `Super+S`.
+--
+-- POZOR na argument směru, samotné `slidevert` sjíždí zespodu. Special workspace
+-- volá startAnimation s `left = true` pro IN a `false` pro OUT (Monitor.cpp),
+-- a v `slidevert` větvi znamená `left` u IN start POD obrazovkou. Argument
+-- (`args[1]`, oddělený mezerou) to přebije, ale jeho jméno je kontraintuitivní:
+-- `top` u IN = start nad obrazovkou, `bottom` u OUT = odjezd nahoru. Obojí
+-- dohromady dává quake chování, tedy sjezd shora a návrat tamtéž.
+hl.animation({ leaf = "specialWorkspaceIn",  enabled = true, speed = 4,    bezier = "easeOutQuint", style = "slidevert top" })
+hl.animation({ leaf = "specialWorkspaceOut", enabled = true, speed = 1.94, bezier = "linear",       style = "slidevert bottom" })
 
 -- Layout per workspace. Přepnout layout za běhu nejde — `hl.layout` má jediný
 -- člen (`register`) a `hyprctl keyword` i `hyprctl layouts` s Lua configem vrací
@@ -675,9 +681,14 @@ hl.window_rule({
 })
 
 -- Quake terminál. Geometrie plovoucího okna, které si sám spouští workspace rule
--- `special:quake` výš — 60 % šířky × 45 % výšky monitoru, zarovnané nahoře.
--- `y = 56` je rezervovaná zóna waybaru (48 px) plus 8 px mezera, tedy stejná
--- hodnota, na jakou se sám usadil hypr-hud.
+-- `special:quake` výš — na 5120×1440 je to 60 % šířky × 45 % výšky, zarovnané
+-- nahoře. `y = 56` je rezervovaná zóna waybaru (48 px) plus 8 px mezera, tedy
+-- stejná hodnota, na jakou se sám usadil hypr-hud.
+--
+-- POZOR: hodnoty musí být v pixelech. Procenta (`size = "60% 45%"`) Hyprland
+-- v Lua window rule **zahodí bez hlášky v logu** — pravidlo se načte, `float`
+-- se aplikuje a okno dostane výchozí plovoucí velikost od layoutu (naměřeno
+-- 2531×1348 místo 3072×648). Při změně monitoru se čísla musí přepočítat.
 --
 -- Matchuje se na class z `--class quake-term`, ne na `kitty` — normální terminál
 -- ze `Super+Q` musí zůstat dlaždicový.
@@ -686,6 +697,6 @@ hl.window_rule({
     match = { class = "^quake-term$" },
 
     float = true,
-    size  = "60% 45%",
-    move  = "20% 56",
+    size  = "3072 648",
+    move  = "1024 56",
 })

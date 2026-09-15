@@ -549,11 +549,16 @@ Jméno se propisuje na čtyři místa v `dot_config/hypr/hyprland.lua` a do `jus
 | `hl.bind(mainMod .. " + grave", …)` | klávesa |
 | `quake:` v `justfile` | test bez zkratky |
 
-Geometrie je 60 % šířky × 45 % výšky na `move = "20% 56"` — `20 %` vlevo centruje 60%
-široké okno a `y = 56` je rezervovaná zóna waybaru (48 px) plus 8 px mezera, tedy stejná
-hodnota, na jakou se sám usadil hypr-hud. Je to **jediné pravidlo v repu, které používá
-`size`**; kdyby Hyprland procenta nevzal, fallback jsou absolutní pixely
-(`size = "3072 648"`, `move = "1024 56"`), což je tvar ověřený u `move-hyprland-run`.
+Geometrie je `size = "3072 648"` na `move = "1024 56"`, tedy na 5120×1440 šedesát procent
+šířky a pětačtyřicet výšky, vodorovně vycentrované; `y = 56` je rezervovaná zóna waybaru
+(48 px) plus 8 px mezera, stejná hodnota, na jakou se sám usadil hypr-hud. Při změně
+monitoru se čísla přepočítávají ručně.
+
+**Procenta v `size`/`move` Lua window rule nebere.** `size = "60% 45%"` se zahodí bez
+hlášky v logu — pravidlo se načte, `float` se aplikuje, ale okno dostane výchozí plovoucí
+velikost od layoutu. Naměřeno na téhle konfiguraci: `2531×1348` na `[1295,70]` místo
+`3072×648` na `[1024,56]`. Je to zároveň jediné pravidlo v repu, které `size` používá —
+pixelový tvar odpovídá tomu, co dělá `move-hyprland-run`.
 
 Pasti:
 
@@ -564,10 +569,22 @@ Pasti:
   každé kitty okno včetně toho ze `Super+Q`. Stejný idiom jako `--app-id` u satty.
 - **kitty není v repu spravované chezmoi** (`dot_config/kitty/` neexistuje), takže odlišení
   quake instance musí jít přes CLI flagy, ne přes config soubor.
-- **Animace `specialWorkspaceIn`/`Out` (`slidevert`) platí i pro scratchpad `magic`.**
-  Bez nich se dědí `fade` z `workspaces` a sjezd shora není vidět; leafy i styl `slidevert`
-  jsou ověřené ve `strings` na `.Hyprland-wrapped`, ve stubu nejsou (`hl.animation` je
-  typované jako `fun(...): any`).
+- **Samotné `slidevert` u special workspace jede zespodu, ne shora.** Směr se přebíjí
+  druhým slovem ve stylu (`CVarList args(ANIMSTYLE, 0, 's')`, kontroluje se `args[1]`),
+  a jméno argumentu je kontraintuitivní: používá se `specialWorkspaceIn = "slidevert top"`
+  a `specialWorkspaceOut = "slidevert bottom"`. Důvod je v
+  `src/animation/WorkspaceAnimationController.cpp` — special workspace volá
+  `startAnimation` s `left = true` pro IN a `false` pro OUT (`src/output/Monitor.cpp`),
+  a ve `vert` větvi znamená `left` u IN start pod obrazovkou, u OUT odjezd nahoru.
+  Poslední slovo stylu může být procento (`"slidevert top 50%"`).
+- **Animace `specialWorkspaceIn`/`Out` platí i pro scratchpad `magic`.** Bez nich se dědí
+  `fade` z `workspaces`; leafy i styl jsou ověřené ve `strings` na `.Hyprland-wrapped`,
+  ve stubu nejsou (`hl.animation` je typované jako `fun(...): any`).
+- **Směr animace se dá změřit bez oka**: pruh `grim -g "0,1080 5120x60"` pod finální
+  pozicí okna, baseline před toggle a pak sled snímků; porovnává se odchylka ve sloupcích
+  pod oknem proti sloupcům vedle něj (ty chytí jen `decoration:dim_special`). Naměřeno —
+  `slidevert`: pod oknem 16,6 vs vedle 8,0 (okno tudy projede); `slidevert top`: pod oknem
+  5,9 vs vedle 18,1 (neprojede). Odjezd stejnou metodou s baseline při otevřeném panelu.
 - Ve waybaru se nový workspace neprojeví — `hyprland/workspaces` nemá `show-special`,
   takže `format-icons` se nemění.
 

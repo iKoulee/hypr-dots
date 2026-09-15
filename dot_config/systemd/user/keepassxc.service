@@ -5,10 +5,12 @@ PartOf=hyprland-session.target
 After=hyprland-session.target waybar.service
 
 [Service]
-# start-hyprland-nix nastavuje kvůli NVIDII LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu
-# a hyprland.lua ho posílá do systemd přes import-environment. Nix binárky by si
-# pak natáhly systémové Qt místo svého (keepassxc 2.7.12 chce Qt 5.15.19, systém
-# má 5.15.18) a spadly na "requires Qt 5.15.19, found Qt 5.15.18".
+# start-hyprland-nix nastavuje kvůli NVIDII LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu.
+# Do systemd se ta proměnná dnes nedostává — v seznamech u import-environment
+# a dbus-update-activation-environment v hyprland.lua schválně není (viz CLAUDE.md,
+# sekce LibreOffice). Řádek níž je pojistka pro případ, že by tam znovu prosákla:
+# nixová Qt binárka by si natáhla systémové Qt (keepassxc 2.7.12 chce Qt 5.15.19,
+# systém má 5.15.18) a spadla na "requires Qt 5.15.19, found Qt 5.15.18".
 UnsetEnvironment=LD_LIBRARY_PATH
 # Qt se rozhoduje mezi SNI a starým X11 systrayem v okamžiku vytvoření tray ikony,
 # tedy hned při startu. Bez běžícího org.kde.StatusNotifierWatcher (poskytuje ho

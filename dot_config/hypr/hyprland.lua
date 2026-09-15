@@ -675,9 +675,14 @@ hl.window_rule({
 })
 
 -- Quake terminál. Geometrie plovoucího okna, které si sám spouští workspace rule
--- `special:quake` výš — 60 % šířky × 45 % výšky monitoru, zarovnané nahoře.
--- `y = 56` je rezervovaná zóna waybaru (48 px) plus 8 px mezera, tedy stejná
--- hodnota, na jakou se sám usadil hypr-hud.
+-- `special:quake` výš — na 5120×1440 je to 60 % šířky × 45 % výšky, zarovnané
+-- nahoře. `y = 56` je rezervovaná zóna waybaru (48 px) plus 8 px mezera, tedy
+-- stejná hodnota, na jakou se sám usadil hypr-hud.
+--
+-- POZOR: hodnoty musí být v pixelech. Procenta (`size = "60% 45%"`) Hyprland
+-- v Lua window rule **zahodí bez hlášky v logu** — pravidlo se načte, `float`
+-- se aplikuje a okno dostane výchozí plovoucí velikost od layoutu (naměřeno
+-- 2531×1348 místo 3072×648). Při změně monitoru se čísla musí přepočítat.
 --
 -- Matchuje se na class z `--class quake-term`, ne na `kitty` — normální terminál
 -- ze `Super+Q` musí zůstat dlaždicový.
@@ -686,6 +691,6 @@ hl.window_rule({
     match = { class = "^quake-term$" },
 
     float = true,
-    size  = "60% 45%",
-    move  = "20% 56",
+    size  = "3072 648",
+    move  = "1024 56",
 })

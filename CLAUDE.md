@@ -549,11 +549,16 @@ Jméno se propisuje na čtyři místa v `dot_config/hypr/hyprland.lua` a do `jus
 | `hl.bind(mainMod .. " + grave", …)` | klávesa |
 | `quake:` v `justfile` | test bez zkratky |
 
-Geometrie je 60 % šířky × 45 % výšky na `move = "20% 56"` — `20 %` vlevo centruje 60%
-široké okno a `y = 56` je rezervovaná zóna waybaru (48 px) plus 8 px mezera, tedy stejná
-hodnota, na jakou se sám usadil hypr-hud. Je to **jediné pravidlo v repu, které používá
-`size`**; kdyby Hyprland procenta nevzal, fallback jsou absolutní pixely
-(`size = "3072 648"`, `move = "1024 56"`), což je tvar ověřený u `move-hyprland-run`.
+Geometrie je `size = "3072 648"` na `move = "1024 56"`, tedy na 5120×1440 šedesát procent
+šířky a pětačtyřicet výšky, vodorovně vycentrované; `y = 56` je rezervovaná zóna waybaru
+(48 px) plus 8 px mezera, stejná hodnota, na jakou se sám usadil hypr-hud. Při změně
+monitoru se čísla přepočítávají ručně.
+
+**Procenta v `size`/`move` Lua window rule nebere.** `size = "60% 45%"` se zahodí bez
+hlášky v logu — pravidlo se načte, `float` se aplikuje, ale okno dostane výchozí plovoucí
+velikost od layoutu. Naměřeno na téhle konfiguraci: `2531×1348` na `[1295,70]` místo
+`3072×648` na `[1024,56]`. Je to zároveň jediné pravidlo v repu, které `size` používá —
+pixelový tvar odpovídá tomu, co dělá `move-hyprland-run`.
 
 Pasti:
 

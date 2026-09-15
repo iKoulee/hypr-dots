@@ -975,9 +975,12 @@ ExecStartPre=-/usr/bin/gdbus wait --session --timeout 10 org.kde.StatusNotifierW
 
 Prefix `-` je schválně: bez waybaru má keepassxc naběhnout i tak, kvůli Secret Service.
 Timeout je krátký záměrně — naměřeno 370–395 ms na čtyřech boot cyklech, takže 10 s je
-25násobná rezerva. Delší čekání navíc rozšiřuje okno, ve kterém D-Bus aktivace
-`org.freedesktop.secrets` (je activatable, `Exec=` míří na shim) spustí druhou instanci
-mimo unit.
+25násobná rezerva. Delší čekání navíc přímo prodlužuje, jak dlouho visí klient, který si
+řekl o hesla: `org.freedesktop.secrets` je activatable a aktivace jde přes
+`SystemdService=` na tenhle unit (viz níž), takže požadavek čeká, než `ExecStartPre`
+doběhne. Do aktivačního limitu dbusu se to vejde s rezervou — `service_start_timeout`
+je tady 120 s (`/usr/share/dbus-1/session.conf`).
+
 Kontrola, kdo je reálně v trayi (keepassxc tam musí mít vlastní `:1.N/StatusNotifierItem`,
 `busctl --user list | grep keepassxc` dá odpovídající PID):
 
@@ -998,6 +1001,38 @@ Secret Service se přepíná dvěma soubory:
 - `dot_local/share/dbus-1/services/org.freedesktop.secrets.service.tmpl` — user-level
   D-Bus aktivace stíní systémovou z `/usr/share/dbus-1/services/`. D-Bus service soubory
   neumí `%h`, proto chezmoi template s `{{ .chezmoi.homeDir }}`.
+
+**`SystemdService=` v tom souboru být musí, jinak aktivace obchází systemd.** Celý
+následující popis selhání je stav **bez** toho řádku, tedy staré `Exec=` cesty — dnes
+už k němu dojít nemůže, ale je to past, do které se dá spadnout zpátky jedním smazaným
+řádkem. Se samotným `Exec=` spustí dbus-daemon shim jako svůj vlastní proces — mimo
+`keepassxc.service`, tedy
+bez `ExecStartPre` čekání na tray watcher, bez `UnsetEnvironment`, bez `PartOf` a mimo
+dosah `systemctl --user restart keepassxc`. Unit pak při startu session narazí na běžící
+instanci, vypíše `Another instance of KeePassXC is already running.` a skončí **s exit 0**,
+takže `Restart=on-failure` nezabere a unit tiše zhasne jako `inactive` — zatímco aplikace
+běží dál jako sirotek. Není to teoretické: 10. 8. 2026 tu aktivaci čtyřikrát vyvolaly
+`gnome-remote-desktop-daemon` a `remmina`, obojí brzy po přihlášení.
+
+Rozlišit obě cesty jde podle tvaru hlášky v journalu — stará `Exec=` cesta unit neuvádí:
+
+| cesta | hláška `dbus-daemon` |
+|---|---|
+| `Exec=` (špatně) | `Activating service name='org.freedesktop.secrets' requested by …` |
+| `SystemdService=` (správně) | `Activating via systemd: service name='org.freedesktop.secrets' unit='keepassxc.service'` |
+
+Test bez odhlašování — zastavit unit a sáhnout na jméno; keepassxc musí naskočit
+v cgroup `…/app.slice/keepassxc.service`, ne mimo ni:
+
+```bash
+systemctl --user stop keepassxc.service
+gdbus call --session --dest org.freedesktop.secrets \
+  --object-path /org/freedesktop/secrets --method org.freedesktop.DBus.Peer.Ping
+systemctl --user show -p MainPID -p ControlGroup --value keepassxc.service
+```
+
+Po editaci souboru je potřeba `busctl --user call org.freedesktop.DBus /org/freedesktop/DBus \
+org.freedesktop.DBus ReloadConfig`, jinak dbus-daemon jede podle staré verze.
 
 Kontrolní bod je `busctl --user list | grep org.freedesktop.secrets` — musí ukazovat na
 keepassxc. Skupina vystavená přes Secret Service je nastavení v databázi, ne v configu;

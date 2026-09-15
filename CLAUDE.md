@@ -999,6 +999,35 @@ Secret Service se přepíná dvěma soubory:
   D-Bus aktivace stíní systémovou z `/usr/share/dbus-1/services/`. D-Bus service soubory
   neumí `%h`, proto chezmoi template s `{{ .chezmoi.homeDir }}`.
 
+**`SystemdService=` v tom souboru být musí, jinak aktivace obchází systemd.** Se samotným
+`Exec=` spustí dbus-daemon shim jako svůj vlastní proces — mimo `keepassxc.service`, tedy
+bez `ExecStartPre` čekání na tray watcher, bez `UnsetEnvironment`, bez `PartOf` a mimo
+dosah `systemctl --user restart keepassxc`. Unit pak při startu session narazí na běžící
+instanci, vypíše `Another instance of KeePassXC is already running.` a skončí **s exit 0**,
+takže `Restart=on-failure` nezabere a unit tiše zhasne jako `inactive` — zatímco aplikace
+běží dál jako sirotek. Není to teoretické: 10. 8. 2026 tu aktivaci čtyřikrát vyvolaly
+`gnome-remote-desktop-daemon` a `remmina`, obojí brzy po přihlášení.
+
+Rozlišit obě cesty jde podle tvaru hlášky v journalu — stará `Exec=` cesta unit neuvádí:
+
+| cesta | hláška `dbus-daemon` |
+|---|---|
+| `Exec=` (špatně) | `Activating service name='org.freedesktop.secrets' requested by …` |
+| `SystemdService=` (správně) | `Activating via systemd: service name='org.freedesktop.secrets' unit='keepassxc.service'` |
+
+Test bez odhlašování — zastavit unit a sáhnout na jméno; keepassxc musí naskočit
+v cgroup `…/app.slice/keepassxc.service`, ne mimo ni:
+
+```bash
+systemctl --user stop keepassxc.service
+gdbus call --session --dest org.freedesktop.secrets \
+  --object-path /org/freedesktop/secrets --method org.freedesktop.DBus.Peer.Ping
+systemctl --user show -p MainPID -p ControlGroup --value keepassxc.service
+```
+
+Po editaci souboru je potřeba `busctl --user call org.freedesktop.DBus /org/freedesktop/DBus \
+org.freedesktop.DBus ReloadConfig`, jinak dbus-daemon jede podle staré verze.
+
 Kontrolní bod je `busctl --user list | grep org.freedesktop.secrets` — musí ukazovat na
 keepassxc. Skupina vystavená přes Secret Service je nastavení v databázi, ne v configu;
 bez ní je služba na D-Bus, ale nevrací žádnou kolekci (`Collections` → `ao 0`).

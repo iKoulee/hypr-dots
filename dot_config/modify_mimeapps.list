@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+#
+# chezmoi modify_ skript: ~/.config/mimeapps.list se celý nespravuje, protože si do něj
+# zapisují aplikace samy (Firefox, Thunderbird, …). Skript dostane aktuální obsah na
+# stdin a jen vynutí výchozí aplikace z DEFAULTS v sekci [Default Applications];
+# všechno ostatní nechá, jak je.
+
+import sys
+
+DEFAULTS = {
+    "text/markdown": "org.gnome.gitlab.somas.Apostrophe.desktop",
+}
+SECTION = "[Default Applications]"
+
+lines = sys.stdin.read().splitlines()
+out, pending, in_section, seen_section = [], dict(DEFAULTS), False, False
+
+
+def flush():
+    out.extend(f"{k}={v}" for k, v in pending.items())
+    pending.clear()
+
+
+for line in lines:
+    stripped = line.strip()
+    if stripped.startswith("["):
+        if in_section:
+            # Doplněné klíče patří před prázdné řádky oddělující sekce.
+            trailing = []
+            while out and not out[-1].strip():
+                trailing.append(out.pop())
+            flush()
+            out.extend(trailing)
+        in_section = stripped == SECTION
+        seen_section |= in_section
+    elif in_section and "=" in stripped:
+        key = stripped.split("=", 1)[0].strip()
+        if key in DEFAULTS:
+            if key in pending:
+                out.append(f"{key}={pending.pop(key)}")
+            continue
+    out.append(line)
+
+if in_section:
+    flush()
+if not seen_section:
+    if out and out[-1].strip():
+        out.append("")
+    out.append(SECTION)
+    flush()
+
+print("\n".join(out))

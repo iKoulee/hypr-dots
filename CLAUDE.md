@@ -44,6 +44,7 @@ just --list           # přehled všech příkazů
 | `dot_local/share/applications/` | `~/.local/share/applications/` |
 | `dot_local/share/wallpapers/` | `~/.local/share/wallpapers/` |
 | `dot_local/share/dbus-1/services/` | `~/.local/share/dbus-1/services/` |
+| `dot_config/modify_mimeapps.list` | `~/.config/mimeapps.list` (jen vynucené defaulty, zbytek souboru nechává) |
 
 `CLAUDE.md`, `README.md` a `justfile` jsou v `.chezmoiignore` — chezmoi je nenasazuje.
 Tamtéž je i `.config/keepassxc` (obsahuje privátní KeeShare klíč a stav), takže KeePassXC
@@ -1166,6 +1167,56 @@ env -i HOME="$HOME" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
   PATH="$HOME/.local/bin:$HOME/.nix-profile/bin:/usr/bin:/bin" \
   sh -c 'command -v libreoffice; libreoffice --version'
 ```
+
+### Apostrophe (markdown editor)
+
+Systémový (debianí) Apostrophe 3.4-2, výchozí aplikace pro `text/markdown`. Bez shimu
+otevře **prázdné bílé okno** — vypadá to jako GL/NVIDIA problém, ale není: stejně to
+padá i bez `GDK_GL` a `LD_LIBRARY_PATH`. Ve stderr je
+
+```
+TypeError: cannot pickle 'ApostropheTextView' object
+  File ".../apostrophe/text_view_markup_handler.py", line 142, in __init__
+    Process(target=self.parse, args=(child_conn,), daemon=True).start()
+```
+
+**Python 3.14 změnil na Linuxu výchozí `multiprocessing` start method z `fork` na
+`forkserver`.** Ten musí `target` picklovat a vázaná metoda s sebou táhne GTK widget.
+Inicializace editoru se utne, okno už ale existuje. Ověřeno: s
+`multiprocessing.set_start_method('fork')` naběhne a vykreslí se.
+
+Oprava má tři části a **všechny jsou nutné**:
+
+| soubor | proč |
+|--------|------|
+| `dot_local/bin/executable_apostrophe` | shim — nastaví `fork` a přes `runpy` spustí `/usr/bin/apostrophe` |
+| `dot_local/share/dbus-1/services/org.gnome.gitlab.somas.Apostrophe.service.tmpl` | desktop soubor má `DBusActivatable=true` |
+| `dot_config/modify_mimeapps.list` | `text/markdown` → `org.gnome.gitlab.somas.Apostrophe.desktop` (předtím ReText) |
+
+**Shim v `PATH` sám nestačí.** Kvůli `DBusActivatable=true` spouští wofi i `xdg-open`
+(přes gio) aplikaci D-Bus aktivací a systémový service soubor má `Exec=/usr/bin/apostrophe
+--gapplication-service` absolutní cestou. User-level service soubor ho stíní stejně jako
+u `org.freedesktop.secrets` (sekce Keyring a hesla), proto chezmoi template kvůli `homeDir`.
+
+`mimeapps.list` je `modify_` skript, ne spravovaný soubor — zapisují si do něj aplikace
+samy (Firefox, Thunderbird, …). Skript dostane aktuální obsah na stdin a jen vynutí klíče
+ze slovníku `DEFAULTS` v sekci `[Default Applications]`; je idempotentní. Další výchozí
+aplikace se přidávají tam.
+
+Kontrola:
+
+```bash
+xdg-mime query default text/markdown        # org.gnome.gitlab.somas.Apostrophe.desktop
+gio open CLAUDE.md; ps -eo args | grep 'set_start_method("fork")'   # běží přes shim
+```
+
+Pozor, **`pkill -f apostrophe` zabije i shell, ze kterého to spouštíš**, pokud jeho
+příkazová řádka obsahuje slovo apostrophe (třeba v cestě). Hledej podle PID.
+
+**Až vyjde opravený balíček, smazat všechny tři soubory** (z `modify_mimeapps.list` stačí
+nechat záznam v `DEFAULTS`). Stejná past může potkat i jiné systémové Python aplikace
+s `Process(target=self.metoda)` — prázdné okno u Python/GTK aplikace tedy znamená napřed
+ji spustit z terminálu a číst traceback, ne ladit GL.
 
 ### Input layout
 

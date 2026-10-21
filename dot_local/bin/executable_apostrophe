@@ -1,0 +1,25 @@
+#!/bin/sh
+#
+# Shim před systémovým Apostrophe (debianí balíček 3.4-2).
+#
+# Apostrophe 3.4 na Pythonu 3.14 otevře prázdné bílé okno. Není to GL ani NVIDIA —
+# při startu spadne výjimka
+#   TypeError: cannot pickle 'ApostropheTextView' object
+# z text_view_markup_handler.py, který pouští parser markdownu jako
+#   Process(target=self.parse, …)
+# Python 3.14 změnil na Linuxu výchozí start method z `fork` na `forkserver`, a ten
+# musí target picklovat — vázaná metoda s sebou táhne GTK widget, který picklovat nejde.
+# Inicializace editoru se utne, okno už ale existuje. Podrobnosti v CLAUDE.md, sekce Apostrophe.
+#
+# Shim vrátí `fork` a spustí /usr/bin/apostrophe beze změny. Smazat, až vyjde opravený balíček.
+#
+# Desktop soubor má DBusActivatable=true, takže wofi i xdg-open spouští aplikaci přes
+# D-Bus aktivaci, ne přes PATH. Na tenhle shim proto míří i
+# ~/.local/share/dbus-1/services/org.gnome.gitlab.somas.Apostrophe.service.
+
+exec /usr/bin/python3 -c '
+import multiprocessing, runpy, sys
+multiprocessing.set_start_method("fork")
+sys.argv[0] = "/usr/bin/apostrophe"
+runpy.run_path(sys.argv[0], run_name="__main__")
+' "$@"
